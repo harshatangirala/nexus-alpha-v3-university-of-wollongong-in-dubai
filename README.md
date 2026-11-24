@@ -2,6 +2,17 @@
 
 **University of Wollongong in Dubai · Master of Applied AI · Final project**
 
+| | Link |
+|---|---|
+| Lite dashboard (public, always on) | <https://nexus-alpha-v3-lite.streamlit.app> |
+| Full dashboard (13 networks, runs on the author's machine during demonstrations) | <https://buffalo-deposits-graph-legends.trycloudflare.com> |
+| CV dataset (price bars the charts are drawn from) | <https://drive.google.com/file/d/1Y7wvfpJcjnmXLP79hHTih-jj5pt-muu-/view> |
+| NLP dataset (EDGAR filing text and metadata) | <https://drive.google.com/drive/folders/1nczPvpd_wkMgF5N7uFBfAQMp-Ja96TRI> |
+| All project data | <https://drive.google.com/drive/folders/13rokT8OX1MgZQpzTRLeyvDq-FVdgraSh> |
+| Group deliverables (CV report, NLP report, IEEE paper) | [`deliverables/`](deliverables/) |
+
+The full dashboard loads 13 neural networks (2.9 GB of weights, about 5 GB of memory), which is too heavy for free hosting. The **lite version** on Streamlit Community Cloud needs no model weights: it shows real output of the full models for four stocks, the architecture, the model routing and the Ask AI assistant. See [`lite/README.md`](lite/README.md).
+
 A multimodal study of whether **chart images** and **SEC filing text**, read by 13 neural networks, add predictive information about US stocks beyond what simple price statistics already give. Seven vision networks read weekly, daily and hourly candlestick charts; six language models read 10-K, 10-Q and 8-K filings. The system estimates, at 5, 10, 20 and 40 trading sessions:
 
 | Target | Question | Metric |
@@ -34,6 +45,9 @@ Limitations: 50 large surviving US stocks, one decade with a regime change, one 
 ## Repository layout
 
 ```
+deliverables/ group submissions: CV_Report, NLP_Report and IEEE_Paper (LaTeX source for
+              Overleaf, figures, and a PDF of each), plus the figure and PDF build scripts
+lite/         the lite Streamlit dashboard for public hosting (no model weights needed)
 reports/      the three final PDF reports (Computer Vision, NLP, Multimodal)
 notebook/     NEXUS_Alpha_v3_FINAL.ipynb (the full Colab run), notebook_src/ (the readable
               source it is built from, s00 to s26), build tools, history/ (earlier versions)
@@ -73,7 +87,22 @@ Open `notebook/NEXUS_Alpha_v3_FINAL.ipynb` in Google Colab (a GPU runtime), moun
 
 ## Data
 
-Price bars (daily, hourly) and SEC filings were collected for the 50 stocks; they are **not included** in the repository because of size and licence terms. The data-collection and labelling code is in `notebook/notebook_src/s03_data.pct`, `s04_labels.pct` and `s13_sec_text.pct`.
+The data are too large for GitHub and are shared on public Google Drive links (table at the top):
+
+* **CV dataset** (`nav3_bars_66.zip`, 112 MB): the cleaned price bars from which the notebook's renderer redraws every chart image byte for byte.
+* **NLP dataset** (folders `submissions/` and `texts/`): the EDGAR submission records and the extracted filing text used by the language models.
+
+SEC filings are public records, downloaded under the SEC fair-access policy. The price bars start from a public 1-minute dataset that has no declared licence; they are shared here for non-commercial academic reproduction only. The data-collection and labelling code is in `notebook/notebook_src/s03_data.pct`, `s04_labels.pct` and `s13_sec_text.pct`.
+
+## Deliverables
+
+| Document | Source (Overleaf) | PDF | Body words |
+|---|---|---|---|
+| Computer Vision report (MAAI 901) | `deliverables/CV_Report/CV_Report.tex` | `deliverables/CV_Report/CV_Report.pdf` | about 2,800 (limit 2,500 to 3,000) |
+| NLP report (MAAI 902, section 5.3.3) | `deliverables/NLP_Report/NLP_Report.tex` | `deliverables/NLP_Report/NLP_Report.pdf` | about 3,400 (limit 3,000 to 4,000) |
+| Unified research paper (IEEE conference format) | `deliverables/IEEE_Paper/IEEE_Paper.tex` | `deliverables/IEEE_Paper/IEEE_Paper.pdf` | about 5,100 |
+
+To compile on Overleaf, upload one document folder (the `.tex` file and its `figures/` folder) and compile with pdfLaTeX. See `deliverables/README.md`.
 
 ## Author
 
