@@ -101,6 +101,7 @@ SEC filings are public records, downloaded under the SEC fair-access policy. The
 | Computer Vision report (MAAI 901) | `deliverables/CV_Report/CV_Report.tex` | `deliverables/CV_Report/CV_Report.pdf` | about 2,800 (limit 2,500 to 3,000) |
 | NLP report (MAAI 902, section 5.3.3) | `deliverables/NLP_Report/NLP_Report.tex` | `deliverables/NLP_Report/NLP_Report.pdf` | about 3,400 (limit 3,000 to 4,000) |
 | Unified research paper (IEEE conference format) | `deliverables/IEEE_Paper/IEEE_Paper.tex` | `deliverables/IEEE_Paper/IEEE_Paper.pdf` | about 5,100 |
+| Project presentation (35 slides, both subject rubrics) | `deliverables/presentation/NEXUS_Alpha_v3_Presentation.pptx` | `deliverables/presentation/NEXUS_Alpha_v3_Presentation.pdf` | 35 slides with speaker notes |
 
 To compile on Overleaf, upload one document folder (the `.tex` file and its `figures/` folder) and compile with pdfLaTeX. See `deliverables/README.md`.
 
