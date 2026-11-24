@@ -1,0 +1,12 @@
+table,rows_compared,max_abs_difference,status
+test_H1.csv,12,0.0e+00,identical
+test_H2.csv,12,0.0e+00,identical
+test_H2b.csv,12,0.0e+00,identical
+test_H3.csv,12,0.0e+00,identical
+test_H4.csv,12,0.0e+00,identical
+test_deploy.csv,12,0.0e+00,identical
+test_H5.csv,18,0.0e+00,identical
+cv_leaderboard_test.csv,276,0.0e+00,identical
+fusion_leaderboard_test.csv,108,0.0e+00,identical
+nlp_leaderboard_test.csv,204,0.0e+00,identical
+nlp_panel_leaderboard_test.csv,180,0.0e+00,identical

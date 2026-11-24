@@ -1,0 +1,153 @@
+# %% [markdown]
+## 18. NLP analysis on validation filings (2022-2023)
+
+### 18.1 Leaderboard, best model, and skill by filing type (Q6) and sector (Q7, Q9)
+
+# %%
+NLP_MAIN = [m for m in list(NLP_FT_IDS.values()) + ["fingpt_frozen", "fingpt_qlora", "tfidf_lr"] if REG.get(m, {}).get("status") == "RUN"]
+NLP_OTHER = [m for m in [f"{e}_frozen" for e in ENCODERS] + [f"{e}_frozen_1chunk" for e in ENCODERS] + ["prior_event"]
+             if REG.get(m, {}).get("status") == "RUN"]
+LABEL_OF.update({m: REG.get(m, {}).get("label", m) for m in REG})
+LB_NLP_VAL = leaderboard(EVENT, NLP_MAIN + NLP_OTHER, EVENT.mask["val"]); LB_NLP_VAL.to_csv(SUB["tables"] / "nlp_leaderboard_val.csv", index=False)
+PIV_NLP = LB_NLP_VAL[LB_NLP_VAL.status == "RUN"].pivot_table(index="model", columns="task", values="primary")
+PIV_NLP = PIV_NLP[[t for t in TASKS if t in PIV_NLP.columns]]
+NLP_MAIN = [m for m in NLP_MAIN if m in PIV_NLP.index]
+display(PIV_NLP.round(3))
+NLP_RANK = mean_rank(LB_NLP_VAL[LB_NLP_VAL.model.isin(NLP_MAIN)])
+NLP_BEST = NLP_RANK.index[0] if len(NLP_RANK) else None
+BEST_NLP_TASK = {t: PIV_NLP.loc[NLP_MAIN, t].idxmax() for t in TASKS if t in PIV_NLP and PIV_NLP.loc[NLP_MAIN, t].notna().any()} if NLP_MAIN else {}
+display(NLP_RANK.round(2).to_frame("mean_rank")); NLP_RANK.to_frame("mean_rank").to_csv(SUB["tables"] / "nlp_rank_val.csv")
+SKILL_NLP_VAL = pd.DataFrame([{"task": t, "model": m, **skill_test(EVENT, t, load_pred("event", m)[t], EVENT.mask["val"])} for t, m in BEST_NLP_TASK.items()])
+if len(SKILL_NLP_VAL):
+    SKILL_NLP_VAL.to_csv(SUB["tables"] / "nlp_skill_val.csv", index=False); display(SKILL_NLP_VAL.round(4))
+WHY_NLP = why_best(NLP_BEST, NLP_RANK, PIV_NLP, NLP_MAIN) if NLP_BEST else "No NLP model ran."
+display(Markdown(WHY_NLP)); (SUB["results"] / "why_nlp_best_val.md").write_text(WHY_NLP)
+if NLP_MAIN:
+    fig, ax = plt.subplots(figsize=(13, 0.45 * len(PIV_NLP) + 1.5))
+    Zr = PIV_NLP.rank(pct=True)
+    ax.imshow(Zr.values, cmap="RdYlGn", aspect="auto", vmin=0, vmax=1)
+    for i in range(PIV_NLP.shape[0]):
+        for j in range(PIV_NLP.shape[1]):
+            v = PIV_NLP.values[i, j]; ax.text(j, i, "" if not np.isfinite(v) else f"{v:.3f}", ha="center", va="center", fontsize=6.5)
+    ax.set_xticks(range(PIV_NLP.shape[1])); ax.set_xticklabels(PIV_NLP.columns, rotation=45, fontsize=7)
+    ax.set_yticks(range(len(PIV_NLP))); ax.set_yticklabels(PIV_NLP.index, fontsize=7)
+    ax.set_title("NLP validation primary metric on filing events"); plt.tight_layout(); savefig(fig, "nlp_leaderboard_val.png"); plt.show()
+
+def by_group(ctx, models, mask, col_values, group_name):
+    rows = []
+    for gval in sorted(set(col_values[mask])):
+        mg = mask & (col_values == gval)
+        for m in models:
+            pr = load_pred(ctx.name, m)
+            for t in TASKS:
+                r = ctx.rows(t, mg, pr[t])
+                rows.append({group_name: gval, "model": m, "task": t, "target": t.split("_")[0], "n": len(r),
+                             "primary": primary_value(t, ctx.Y[t][r], pr[t][r]) if len(r) >= 25 else np.nan})
+    return pd.DataFrame(rows)
+if NLP_MAIN:
+    NLP_FORM_VAL = by_group(EVENT, NLP_MAIN, EVENT.mask["val"], EV["form"].values, "form"); NLP_FORM_VAL.to_csv(SUB["tables"] / "nlp_by_form_val.csv", index=False)
+    display(NLP_FORM_VAL.groupby(["form", "target"])["primary"].max().unstack().round(3))
+    NLP_SECTOR_VAL = by_group(EVENT, NLP_MAIN, EVENT.mask["val"], EV["sector"].values, "sector"); NLP_SECTOR_VAL.to_csv(SUB["tables"] / "nlp_by_sector_val.csv", index=False)
+    _sm = NLP_SECTOR_VAL.groupby(["sector", "target", "model"])["primary"].mean().reset_index()
+    BEST_NLP_BY_SECTOR_VAL = best_rows(_sm, ["sector", "target"]).pivot(index="sector", columns="target", values="model")
+    display(BEST_NLP_BY_SECTOR_VAL); BEST_NLP_BY_SECTOR_VAL.to_csv(SUB["tables"] / "nlp_best_by_sector_val.csv")
+
+# %% [markdown]
+### 18.2 Ablations: fine-tuned vs frozen, domain pre-training, length
+
+# %%
+NABL = []
+pairs = [(f"{e}_ft", f"{e}_frozen", "fine-tuned vs frozen") for e in ENCODERS] + [(f"{e}_frozen", f"{e}_frozen_1chunk", "4 chunks vs first 512 tokens") for e in ENCODERS] + [
+    ("finbert_ft", "roberta_l_ft", "FinBERT (finance, base) vs RoBERTa-large (general, large)"), ("secbert_ft", "finbert_ft", "SEC-BERT vs FinBERT (domain)"),
+    ("longformer_ft", "finbert_ft", "Longformer 4096 vs FinBERT 512 (length)"), ((NLP_BEST or "tfidf_lr"), "tfidf_lr", "best NLP vs TF-IDF baseline")]
+for a, b, what in pairs:
+    if a == b or REG.get(a, {}).get("status") != "RUN" or REG.get(b, {}).get("status") != "RUN":
+        continue
+    pa, pb = load_pred("event", a), load_pred("event", b)
+    for kd in ("dir", "vol", "dd"):
+        NABL.append({"comparison": what, "A": a, "B": b, "target": kd, **paired_delta_family(EVENT, kd, pa, pb, EVENT.mask["val"])})
+NLP_ABL_VAL = pd.DataFrame(NABL)
+if len(NLP_ABL_VAL):
+    NLP_ABL_VAL["p_holm"] = holm(NLP_ABL_VAL["p"].values); NLP_ABL_VAL.to_csv(SUB["tables"] / "nlp_ablations_val.csv", index=False); display(NLP_ABL_VAL.round(4))
+
+# %% [markdown]
+### 18.3 What in the filings goes with market moves (Q8)
+Three complementary views (development filings): **(a)** 8-K item types and their mean |z| (§14), **(b)** n-grams associated with large or signed reactions (§15), **(c)** FinBERT sentence tone vs the reaction, and **(d)** integrated-gradient token attributions of the best fine-tuned encoder for a few large-reaction validation filings. All are associations, not causes.
+
+# %%
+TONE_ROWS = []
+dev_m = EV.block.isin(["train", "inner", "val"]).values
+for f_ in CFG["sec"]["forms"] + ["all"]:
+    m = dev_m & np.isfinite(EV["finbert_tone"].values) & np.isfinite(EV["ar2"].values) & ((EV.form == f_).values if f_ != "all" else True)
+    if m.sum() >= 30:
+        TONE_ROWS.append({"form": f_, "n": int(m.sum()), "spearman_tone_vs_signed_AR": float(spearmanr(EV.finbert_tone[m], EV.ar2[m])[0]),
+                          "spearman_tone_vs_abs_z": float(spearmanr(EV.finbert_tone[m], EV.abs_z[m])[0]),
+                          "mean_tone": float(EV.finbert_tone[m].mean())})
+TONE_TAB = pd.DataFrame(TONE_ROWS); TONE_TAB.to_csv(SUB["tables"] / "nlp_tone_vs_reaction_dev.csv", index=False); display(TONE_TAB.round(3))
+
+def integrated_gradients(net, tok, text, max_len, task="vol", h_index=2, steps=24):
+    enc = tok([text], truncation=True, max_length=min(max_len, 512), return_tensors="pt").to(DEV)
+    emb = net.enc.get_input_embeddings()(enc["input_ids"]).detach().float()
+    tot = torch.zeros_like(emb)
+    for a in torch.linspace(1.0 / steps, 1.0, steps):
+        x = (a * emb).requires_grad_(True)
+        o = net.head(net.pooled(attention_mask=enc["attention_mask"], inputs_embeds=x.to(next(net.parameters()).dtype)))
+        y = o["vol"][0, h_index] if task == "vol" else o["dir"][0, h_index, 2] - o["dir"][0, h_index, 0]
+        g, = torch.autograd.grad(y, x); tot += g
+    attr = (emb * tot / steps).sum(-1)[0].detach().cpu().numpy()
+    toks = tok.convert_ids_to_tokens(enc["input_ids"][0])
+    return toks, attr
+IG_ROWS = []
+ig_model = next((m for m in NLP_RANK.index if m.endswith("_ft") and m.replace("_ft", "") in ENCODERS), None) if len(NLP_RANK) else None
+if ig_model and HAS_GPU:
+    try:
+        ck = torch.load(SUB["models"] / f"nlp_{ig_model}.pt", map_location="cpu", weights_only=False)
+        net = TextNet(ck["hf"], from_config=True); net.load_state_dict({k: v.float() for k, v in ck["state_dict"].items()}); net = net.to(DEV).eval()
+        tok = AutoTokenizer.from_pretrained(ck["hf"])
+        big = EV[EVENT.mask["val"]].sort_values("abs_z", ascending=False).head(4)
+        for i, r_ in big.iterrows():
+            for task in ("vol", "dir"):
+                toks, attr = integrated_gradients(net, tok, EV_TEXT[i], ck["max_len"], task)
+                o = np.argsort(-attr)[:12]
+                IG_ROWS.append({"event": f"{r_.ticker} {r_.form} {r_.entry_date.date()}", "abs_z": round(float(r_.abs_z), 2), "output": task,
+                                "top_tokens_raising_output": " ".join(t_.replace("\u2581", "").replace("\u0120", "") for t_ in np.array(toks)[o] if t_ not in ("[CLS]", "[SEP]", "<s>", "</s>"))})
+        del net; torch.cuda.empty_cache()
+    except Exception as e:
+        print("Integrated gradients skipped:", type(e).__name__, e)
+IG_TAB = pd.DataFrame(IG_ROWS)
+if len(IG_TAB):
+    IG_TAB.to_csv(SUB["tables"] / "nlp_integrated_gradients_val.csv", index=False); display(IG_TAB)
+
+# %% [markdown]
+### 18.4 Error analysis (best NLP model, validation)
+
+# %%
+if NLP_BEST:
+    pr = load_pred("event", NLP_BEST); vm = EVENT.mask["val"]
+    r = EVENT.rows("dir_20", vm, pr["dir_20"])
+    E2 = pd.DataFrame({"correct": pr["dir_20"][r].argmax(1) == YE["dir_20"][r], "form": EV.form.values[r], "sector": EV.sector.values[r],
+                       "timing": EV.session_bucket.values[r], "length_decile": pd.qcut(np.log1p(FIL.section_chars.values[EV.fil_id.values[r]]), 5, labels=False, duplicates="drop")})
+    NLP_ERR = {k: E2.groupby(k)["correct"].agg(["mean", "size"]).rename(columns={"mean": "accuracy"}) for k in ["form", "sector", "timing", "length_decile"]}
+    for k, v in NLP_ERR.items():
+        v.to_csv(SUB["tables"] / f"nlp_errors_by_{k}_val.csv")
+    fig, axes = plt.subplots(1, 5, figsize=(19, 3.2))
+    for a_, k in zip(axes[:4], NLP_ERR):
+        NLP_ERR[k]["accuracy"].plot.bar(ax=a_, color="#7c3aed"); a_.axhline(E2.correct.mean(), color="k", ls="--", lw=0.8); a_.set_title(f"20-day accuracy by {k}", fontsize=8)
+    cm = confusion_matrix(YE["dir_20"][r].astype(int), pr["dir_20"][r].argmax(1), labels=[0, 1, 2], normalize="true")
+    axes[4].imshow(cm, cmap="Purples", vmin=0, vmax=1)
+    for i in range(3):
+        for j in range(3):
+            axes[4].text(j, i, f"{cm[i, j]:.2f}", ha="center", va="center", fontsize=8)
+    axes[4].set_xticks(range(3)); axes[4].set_xticklabels(CLASSES, fontsize=7); axes[4].set_yticks(range(3)); axes[4].set_yticklabels(CLASSES, fontsize=7)
+    axes[4].set_title(f"{NLP_BEST}: 20-day confusion", fontsize=8)
+    plt.tight_layout(); savefig(fig, "nlp_errors_val.png"); plt.show()
+
+# %% [markdown]
+### 18.5 Efficiency
+
+# %%
+EFF_NLP = pd.DataFrame([{"model": m, "params_m": REG[m].get("params_m"), "max_tokens": REG[m].get("max_len", NLPC.get(REG[m].get("encoder", ""), {}).get("max_len")),
+                         "train_minutes": REG[m].get("train_minutes"), "docs_per_s_inference": REG[m].get("docs_per_s"),
+                         "val_mean_rank": round(float(NLP_RANK.get(m, np.nan)), 2)} for m in NLP_MAIN])
+EFF_NLP.to_csv(SUB["tables"] / "nlp_efficiency.csv", index=False); display(EFF_NLP)
+tick("18 nlp analysis")

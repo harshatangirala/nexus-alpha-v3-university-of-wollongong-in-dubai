@@ -1,0 +1,37 @@
+modality,task,members,size,w_cv
+CV,dd_10,resnet50_ft + effnet_b0_ft + swin_t_ft,3,
+CV,dd_20,effnet_b0_ft,1,
+CV,dd_40,effnet_b0_ft + vit_b16_ft,2,
+CV,dd_5,swin_t_ft,1,
+CV,dir_10,convnext_t_ft,1,
+CV,dir_20,resnet50_ft + convnext_t_ft + swin_t_ft,3,
+CV,dir_40,resnet50_ft + effnet_b0_ft + vit_b16_ft,3,
+CV,dir_5,convnext_t_ft,1,
+CV,vol_10,effnet_b0_ft + vit_b16_ft + swin_t_ft,3,
+CV,vol_20,effnet_b0_ft + vit_b16_ft + yolov8_cls_ft,3,
+CV,vol_40,effnet_b0_ft + vit_b16_ft + yolov8_cls_ft,3,
+CV,vol_5,effnet_b0_ft + vit_b16_ft + swin_t_ft,3,
+NLP (filing events),dd_10,longformer_ft + fingpt_frozen,2,
+NLP (filing events),dd_20,longformer_ft,1,
+NLP (filing events),dd_40,longformer_ft + deberta_l_ft + tfidf_lr,3,
+NLP (filing events),dd_5,roberta_l_ft + longformer_ft + tfidf_lr,3,
+NLP (filing events),dir_10,secbert_ft,1,
+NLP (filing events),dir_20,secbert_ft,1,
+NLP (filing events),dir_40,fingpt_frozen,1,
+NLP (filing events),dir_5,deberta_l_ft,1,
+NLP (filing events),vol_10,finbert_ft + tfidf_lr,2,
+NLP (filing events),vol_20,finbert_ft + tfidf_lr,2,
+NLP (filing events),vol_40,finbert_ft + roberta_l_ft + tfidf_lr,3,
+NLP (filing events),vol_5,finbert_ft + tfidf_lr,2,
+CV + NLP,dir_5,convnext_t_ft | (no NLP),1,1.0
+CV + NLP,dir_10,convnext_t_ft | (no NLP),1,1.0
+CV + NLP,dir_20,resnet50_ft + convnext_t_ft + swin_t_ft | (no NLP),3,1.0
+CV + NLP,dir_40,resnet50_ft + effnet_b0_ft + vit_b16_ft | (no NLP),3,1.0
+CV + NLP,vol_5,effnet_b0_ft + vit_b16_ft + swin_t_ft | deberta_l_panel_frozen,4,1.0
+CV + NLP,vol_10,effnet_b0_ft + vit_b16_ft + swin_t_ft | deberta_l_panel_frozen + fingpt_panel_frozen + roberta_l_panel_ft,6,0.75
+CV + NLP,vol_20,effnet_b0_ft + vit_b16_ft | deberta_l_panel_frozen,3,0.5
+CV + NLP,vol_40,effnet_b0_ft + vit_b16_ft + yolov8_cls_ft | deberta_l_panel_frozen,4,0.25
+CV + NLP,dd_5,swin_t_ft | deberta_l_panel_frozen + longformer_panel_frozen + roberta_l_panel_ft,4,0.5
+CV + NLP,dd_10,resnet50_ft | deberta_l_panel_frozen + roberta_l_panel_frozen + roberta_l_panel_ft,4,0.0
+CV + NLP,dd_20,effnet_b0_ft | deberta_l_panel_frozen + longformer_panel_frozen + secbert_panel_frozen,4,0.0
+CV + NLP,dd_40,vit_b16_ft | longformer_panel_frozen + secbert_panel_frozen + roberta_l_panel_ft,4,0.0

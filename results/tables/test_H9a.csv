@@ -1,0 +1,13 @@
+family,task,A,B,n,delta,lo,hi,p,p_holm,supported,verdict
+H9a best CV combination vs best single CV model,dir_5,cv_combo_best,convnext_t_ft,6550,0.0,0.0,0.0,1.0,1.0,False,no clear difference
+H9a best CV combination vs best single CV model,dir_10,cv_combo_best,convnext_t_ft,6550,0.0,0.0,0.0,1.0,1.0,False,no clear difference
+H9a best CV combination vs best single CV model,dir_20,cv_combo_best,convnext_t_ft,6550,-0.0031119576679823346,-0.017222214679372797,0.010191433462113804,0.6793206793206793,1.0,False,no clear difference
+H9a best CV combination vs best single CV model,dir_40,cv_combo_best,effnet_b0_ft,6550,0.036583999501631825,0.014212479385054813,0.05987412724016111,0.001998001998001998,0.023976023976023976,True,better
+H9a best CV combination vs best single CV model,vol_5,cv_combo_best,swin_t_ft,6550,0.033834121575467835,0.01758213729676597,0.0513649197030328,0.001998001998001998,0.023976023976023976,True,better
+H9a best CV combination vs best single CV model,vol_10,cv_combo_best,vit_b16_ft,6550,0.03879962011279503,0.02295072194389797,0.05378625168410485,0.001998001998001998,0.023976023976023976,True,better
+H9a best CV combination vs best single CV model,vol_20,cv_combo_best,vit_b16_ft,6550,0.029061911767383486,0.011533961226836703,0.04693922128597483,0.003996003996003996,0.03196803196803197,True,better
+H9a best CV combination vs best single CV model,vol_40,cv_combo_best,yolov8_cls_ft,6550,0.049011008803505396,0.0267376205886234,0.07226759366687938,0.001998001998001998,0.023976023976023976,True,better
+H9a best CV combination vs best single CV model,dd_5,cv_combo_best,swin_t_ft,6550,0.0,0.0,0.0,1.0,1.0,False,no clear difference
+H9a best CV combination vs best single CV model,dd_10,cv_combo_best,resnet50_ft,6550,-0.0066617356400275884,-0.01855145792189902,0.006137751711634708,0.2997002997002997,1.0,False,no clear difference
+H9a best CV combination vs best single CV model,dd_20,cv_combo_best,effnet_b0_ft,6550,0.0,0.0,0.0,1.0,1.0,False,no clear difference
+H9a best CV combination vs best single CV model,dd_40,cv_combo_best,vit_b16_ft,6550,-0.022070576225816096,-0.041782837392922094,-0.005862655892458608,0.007992007992007992,0.055944055944055944,False,no clear difference

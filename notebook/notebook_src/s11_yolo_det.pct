@@ -1,0 +1,69 @@
+# %% [markdown]
+## 11. The ready-made YOLOv8 chart-pattern detector (zero-shot)
+
+`foduucom/stockmarket-pattern-detection-yolov8` is a YOLOv8s **object detector** trained by its authors on annotated chart screenshots (6 classes such as head-and-shoulders top/bottom, M-head, W-bottom, triangle; published mAP@0.5 ≈ 0.61; licence AGPL-3.0 through Ultralytics). It outputs boxes, not forecasts. We run it **unchanged** on our charts (light theme, closest to its training screenshots), turn its detections into features (for each pattern and view: highest confidence and number of boxes) and fit LightGBM heads on them. This answers "do ready-made chart-pattern weights carry predictive information?" without any fine-tuning on our labels. Its features are computed on non-overlapping rows (every 5th session) to save time.
+
+# %%
+def run_yolo_detector():
+    mid = "yolov8_det_patterns"
+    fpath = SUB["features"] / f"yolo_det_{N}.npy"
+    st = Stage("yolo_det", [CFG["yolo_det_repo"], N, CFG["eval_stride"]], [fpath])
+    if not HAS_GPU:
+        not_run(mid, "no GPU"); return None
+    from huggingface_hub import list_repo_files, hf_hub_download
+    from ultralytics import YOLO
+    files = list_repo_files(CFG["yolo_det_repo"])
+    pt = sorted(f for f in files if f.endswith(".pt"))
+    if not pt:
+        not_run(mid, f"no .pt weights in {CFG['yolo_det_repo']}"); return None
+    det = YOLO(hf_hub_download(CFG["yolo_det_repo"], pt[0]))
+    names = det.names if isinstance(det.names, dict) else dict(enumerate(det.names))
+    rows = np.flatnonzero(P["eval_stride_row"].values)
+    if st.done() and fpath.exists():
+        Xd = np.load(fpath)
+    else:
+        Xd = np.full((N, 3 * len(names) * 2), np.nan, np.float32)
+        for s in range(0, len(rows), 64):
+            rb = rows[s: s + 64]
+            imgs = [PALETTE_LIGHT[np.asarray(IMG[r, j])][:, :, ::-1].copy() for r in rb for j in range(3)]   # BGR for Ultralytics
+            res = det.predict(imgs, imgsz=640, conf=0.15, verbose=False, half=True)
+            for q, r in enumerate(rb):
+                feats = []
+                for j in range(3):
+                    bx = res[q * 3 + j].boxes
+                    cls = bx.cls.cpu().numpy().astype(int) if bx is not None and len(bx) else np.array([], int)
+                    cf = bx.conf.cpu().numpy() if bx is not None and len(bx) else np.array([])
+                    for c in sorted(names):
+                        sel = cls == c
+                        feats += [float(cf[sel].max()) if sel.any() else 0.0, float(sel.sum())]
+                Xd[r] = feats
+        np.save(fpath, Xd); st.finish(n_rows=len(rows))
+    cols = [f"{v}_{names[c]}_{s_}" for v in VIEWS for c in sorted(names) for s_ in ("maxconf", "count")]
+    fit_rows = TR & P["eval_stride_row"].values
+    finalize(PANEL, mid, fit_heads(PANEL, Xd, fit_rows, IN, "gbm"), "cv_zero_shot", label="YOLOv8 pattern detector (zero-shot features)",
+             patterns=list(names.values()))
+    # descriptive: how often each pattern fires (daily view) and the mean 20-day log return after it (training rows)
+    dcol = [i for i, c in enumerate(cols) if c.startswith("D_") and c.endswith("maxconf")]
+    tab = []
+    for i in dcol:
+        hit = fit_rows & (Xd[:, i] > 0)
+        tab.append({"pattern": cols[i][2:-8], "share_of_rows": float(hit.sum() / max(1, fit_rows.sum())),
+                    "mean_ret20_when_detected": float(np.nanmean(Y["ret_20"][hit])) if hit.any() else np.nan,
+                    "mean_ret20_otherwise": float(np.nanmean(Y["ret_20"][fit_rows & ~(Xd[:, i] > 0)]))})
+    YOLO_PAT = pd.DataFrame(tab); YOLO_PAT.to_csv(SUB["tables"] / "yolo_patterns_train.csv", index=False); display(YOLO_PAT.round(4))
+    ex = [int(r) for r in rows[np.isin(rows, np.flatnonzero(VA))][:200] if np.nansum(Xd[r, : len(names) * 2: 2]) > 0][:4]
+    if ex:
+        fig, axes = plt.subplots(1, len(ex), figsize=(4 * len(ex), 4), squeeze=False)
+        for a_, r in zip(axes[0], ex):
+            im = PALETTE_LIGHT[np.asarray(IMG[r, 0])][:, :, ::-1].copy()
+            a_.imshow(det.predict([im], imgsz=640, conf=0.15, verbose=False)[0].plot()[:, :, ::-1]); a_.axis("off")
+            a_.set_title(f"{P.at[r, 'ticker']} {P.at[r, 'date'].date()} (weekly)", fontsize=8)
+        plt.suptitle("YOLOv8 pattern detector on our weekly charts (validation examples)"); plt.tight_layout(); savefig(fig, "yolo_detections.png"); plt.show()
+    return Xd
+
+try:
+    X_YOLO_DET = run_yolo_detector()
+except Exception as e:
+    X_YOLO_DET = None; failed("yolov8_det_patterns", e)
+gc.collect(); torch.cuda.empty_cache() if HAS_GPU else None
+tick("11 yolo det")

@@ -1,0 +1,145 @@
+# %% [markdown]
+## 20. Fusion: does combining CV and NLP help? (Q1, Q10) — validation
+
+| Id | Fusion | What is fitted |
+|---|---|---|
+| `fusion_late_top3` | weight × (top-3 CV ensemble) + (1 − weight) × (top-3 NLP panel ensemble) | the weight per task, from {0, .25, .5, .75, 1}, on validation |
+| `fusion_late_best` | the same with the single best CV and best NLP model per task | the weight per task |
+| `fusion_early` | one linear model per task on [best frozen CV features + best frozen NLP panel features] | linear model on training rows |
+| `fusion_tech` (reference) | LightGBM on [technical indicators + the same CV and NLP features] | trees on training rows |
+| `deploy_recipe` | what the dashboard runs: top-3 CV ensemble; on rows with a filing in the last 5 sessions, blended with the top-3 *deployable* NLP models (fine-tuned encoders ≤ 600 M parameters, or TF-IDF) | the fresh-text weight per task |
+
+A weight of 1 means "CV only", 0 means "NLP only": the chosen weights are themselves an answer to Q1.
+
+# %%
+def ens_panel(mid, members_by_task, family, **meta):
+    return ensemble_model(PANEL, mid, members_by_task, family, **meta)
+def choose_weights(pa, pb, mask, grid=None):
+    grid = grid or CFG["fusion_w_grid"]; W = {}
+    for t in TASKS:
+        sc = []
+        for w in grid:
+            p_ = w * np.asarray(pa[t]) + (1 - w) * np.asarray(pb[t]); r = PANEL.rows(t, mask, p_)
+            sc.append(primary_value(t, PANEL.Y[t][r], p_[r]) if len(r) >= 30 else -np.inf)
+        W[t] = float(grid[int(np.argmax(sc))]) if np.isfinite(sc).any() else 1.0      # nothing scorable -> CV only
+    return W
+VM = PANEL.mask["val"]
+BEST_NLPP_TASK = {t: PIV_NLPP[t].idxmax() for t in TASKS if t in PIV_NLPP and PIV_NLPP[t].notna().any()}
+TOP3_NLPP = {t: (list(PIV_NLPP[t].sort_values(ascending=False).dropna().index[: CFG["top_k"]]) if t in PIV_NLPP else []) for t in TASKS}
+FUSION_W = {}
+if any(TOP3_NLPP.values()):
+    ens_panel("nlp_panel_top3", TOP3_NLPP, "nlp_panel_ensemble", label="Top-3 NLP panel ensemble")
+HAVE_CV3 = REG.get("cv_top3", {}).get("status") == "RUN"
+if HAVE_CV3 and have_pred("panel", "nlp_panel_top3"):
+    pa, pb = load_pred("panel", "cv_top3"), load_pred("panel", "nlp_panel_top3")
+    FUSION_W["late_top3"] = choose_weights(pa, pb, VM)
+    finalize(PANEL, "fusion_late_top3", raw_from_probs(blend(pa, pb, FUSION_W["late_top3"])), "fusion", weights=FUSION_W["late_top3"],
+             label="Late fusion: top-3 CV + top-3 NLP")
+if len(BEST_CV_TASK) == len(TASKS) and len(BEST_NLPP_TASK) == len(TASKS):
+    pa = {t: load_pred("panel", BEST_CV_TASK[t])[t] for t in TASKS}; pb = {t: load_pred("panel", BEST_NLPP_TASK[t])[t] for t in TASKS}
+    FUSION_W["late_best"] = choose_weights(pa, pb, VM)
+    finalize(PANEL, "fusion_late_best", raw_from_probs(blend(pa, pb, FUSION_W["late_best"])), "fusion", weights=FUSION_W["late_best"],
+             label="Late fusion: best CV + best NLP")
+_cv_fz = [m for m in CV_OTHER if m.endswith("_frozen") and not m.startswith("resnet50_random")]
+_r_cv = mean_rank(leaderboard(PANEL, _cv_fz, VM)) if _cv_fz else pd.Series(dtype=float)
+_r_nl = mean_rank(leaderboard(PANEL, NLP_PANEL_FROZEN, VM)) if NLP_PANEL_FROZEN else pd.Series(dtype=float)
+BEST_CV_FROZEN = _r_cv.index[0].replace("_frozen", "") if len(_r_cv) else None
+BEST_NLP_FROZEN = _r_nl.index[0].replace("_panel_frozen", "") if len(_r_nl) else None
+if BEST_CV_FROZEN in CV_PCA and BEST_NLP_FROZEN in TEXT_PCA:
+    X_EARLY = np.hstack([CV_PCA[BEST_CV_FROZEN], panel_text_features(BEST_NLP_FROZEN)])
+    finalize(PANEL, "fusion_early", fit_heads(PANEL, X_EARLY, TR, IN, "linear"), "fusion", cv=BEST_CV_FROZEN, nlp=BEST_NLP_FROZEN,
+             label="Early fusion: frozen CV + frozen NLP features")
+    st_ft = Stage("fusion_tech", [BEST_CV_FROZEN, BEST_NLP_FROZEN, N, GBM], [_pred_path("panel", "fusion_tech")])
+    if not (st_ft.done() and have_pred("panel", "fusion_tech")):
+        finalize(PANEL, "fusion_tech", fit_heads(PANEL, np.hstack([X_TECH, X_EARLY]), TR, IN, "gbm"), "reference",
+                 label="Reference: technical + CV + NLP features (LightGBM)"); st_ft.finish()
+# ---- the dashboard recipe
+DEPLOYABLE_NLP = [m for m in NLP_MAIN if (m.endswith("_ft") and (REG[m].get("params_m") or 1e9) <= CFG["deploy_max_params_m"]) or m == "tfidf_lr"]
+def _transfer_id(em):
+    return em.replace("_ft", "").replace("_lr", "") + ("_panel_ft" if em.endswith("_ft") else "_panel_transfer")
+NLP_DEPLOY_TOP3 = {}
+if DEPLOYABLE_NLP:
+    ev_piv = PIV_NLP.loc[[m for m in DEPLOYABLE_NLP if m in PIV_NLP.index]]
+    NLP_DEPLOY_TOP3 = {t: (list(ev_piv[t].sort_values(ascending=False).dropna().index[: CFG["top_k"]]) if t in ev_piv.columns else []) for t in TASKS}
+    ens_panel("nlp_deploy_top3", {t: [_transfer_id(m) for m in NLP_DEPLOY_TOP3[t]] for t in TASKS}, "nlp_panel_ensemble",
+              label="Top-3 deployable NLP models (panel transfer)")
+if HAVE_CV3:
+    pcv = load_pred("panel", "cv_top3")
+    if have_pred("panel", "nlp_deploy_top3"):
+        pnl = load_pred("panel", "nlp_deploy_top3")
+        FUSION_W["deploy_fresh"] = choose_weights(pcv, pnl, VM & FRESH)
+        mixed = blend(pcv, pnl, FUSION_W["deploy_fresh"])
+        dep = {t: np.where((FRESH[:, None] if np.asarray(pcv[t]).ndim == 2 else FRESH), mixed[t], pcv[t]) for t in TASKS}
+    else:
+        FUSION_W["deploy_fresh"] = {t: 1.0 for t in TASKS}; dep = pcv
+    finalize(PANEL, "deploy_recipe", raw_from_probs(dep), "deploy", weights_fresh=FUSION_W["deploy_fresh"], cv_members=TOP3_CV,
+             nlp_members=NLP_DEPLOY_TOP3, label="Dashboard recipe")
+(SUB["results"] / "fusion_weights.json").write_text(json.dumps(FUSION_W, indent=1))
+
+# %%
+# ---------------------------------------------------------------- Q1 and Q10 on validation
+FUSION_IDS = [m for m in ["fusion_late_top3", "fusion_late_best", "fusion_early"] if REG.get(m, {}).get("status") == "RUN"]
+def val_primary(m, t):
+    pr = load_pred("panel", m)[t]; r = PANEL.rows(t, VM, pr)
+    return primary_value(t, PANEL.Y[t][r], pr[r]) if len(r) >= 30 else -np.inf
+def q1_table(mask, tag):
+    """Q1 roles per task; 'best fusion' is always chosen on validation, whatever block is being scored."""
+    rows = []
+    for t in TASKS:
+        cands = {"prior": "prior", "technical (reference)": "tech_gbm", "best CV": BEST_CV_TASK.get(t), "best NLP (panel)": BEST_NLPP_TASK.get(t),
+                 "top-3 CV": "cv_top3", "top-3 NLP": "nlp_panel_top3", "best fusion": None, "dashboard recipe": "deploy_recipe"}
+        fz = {m: val_primary(m, t) for m in FUSION_IDS}
+        cands["best fusion"] = max(fz, key=lambda k: fz[k]) if fz else None
+        for role, m in cands.items():
+            if not m or REG.get(m, {}).get("status") != "RUN":
+                continue
+            pr = load_pred("panel", m)[t]; r = PANEL.rows(t, mask, pr)
+            rows.append({"task": t, "role": role, "model": m, "n": len(r), "primary": primary_value(t, PANEL.Y[t][r], pr[r]) if len(r) >= 30 else np.nan})
+    df = pd.DataFrame(rows); df.to_csv(SUB["tables"] / f"q1_{tag}.csv", index=False)
+    return df
+Q1_VAL = q1_table(VM, "val"); Q1_VAL_FRESH = q1_table(VM & FRESH, "val_fresh")
+display(Q1_VAL.pivot_table(index="role", columns="task", values="primary").round(3))
+print("Fresh-text rows only:"); display(Q1_VAL_FRESH.pivot_table(index="role", columns="task", values="primary").round(3))
+Q10_VAL = pd.DataFrame([{"task": t, **paired_delta(PANEL, t, load_pred("panel", "fusion_late_top3")[t], load_pred("panel", "cv_top3")[t], VM)}
+                        for t in TASKS]) if "fusion_late_top3" in FUSION_IDS and HAVE_CV3 else pd.DataFrame()
+if len(Q10_VAL):
+    Q10_VAL["p_holm"] = holm(Q10_VAL.p.values); Q10_VAL.to_csv(SUB["tables"] / "q10_val.csv", index=False)
+    print("Q10 (validation): top-3 CV + top-3 NLP minus top-3 CV"); display(Q10_VAL.round(4))
+if FUSION_W:
+    display(pd.DataFrame(FUSION_W).rename_axis("task").round(2))
+tick("20 fusion")
+
+# %% [markdown]
+## 21. Monte Carlo price paths (the dashboard's 20-day simulation), checked on validation
+For one stock at one date, 20 daily log returns are simulated as drift + scale × standardised Student-t noise. The scale comes from the recipe's 20-day volatility forecast; the drift is solved so that the simulated DOWN / SIDEWAYS / UP shares at day 20 match the recipe's calibrated probabilities; intraday lows come from the exact Brownian-bridge minimum. The tail thickness ν is chosen on validation from {3, 4, 6, 10, normal} so that the 80 % and 90 % ranges of the 20-day return contain the real outcome about 80 % and 90 % of the time. Test coverage is reported in §23.
+
+# %%
+def mc_eval(mid, mask, nu, n_rows, seed=0, scale=1.0):
+    """scale multiplies the forecast volatility before simulating (1.0 = as forecast; section 23A may calibrate it on validation)."""
+    pr = load_pred("panel", mid); rows = PANEL.rows("ret_20", mask, pr["vol_20"])
+    rows = np.sort(np.random.default_rng(seed).choice(rows, min(n_rows, len(rows)), replace=False))
+    out = []
+    for r in rows:
+        sim = mc_simulate(1.0, P.sigma.values[r], math.exp(pr["vol_20"][r]) * scale, pr["dir_20"][r], nu=nu, n_days=20, n_paths=CFG["mc"]["n_paths"], seed=int(r))
+        q = sim["ret_q"]; y = PANEL.Y["ret_20"][r]
+        out.append({"row": r, "in80": q[1] <= y <= q[5], "in90": q[0] <= y <= q[6], "p_dd_mc": sim["p_dd"], "dd": PANEL.Y["dd_20"][r], "p_dd_head": pr["dd_20"][r]})
+    return pd.DataFrame(out)
+MC_CFG = {"nu": 6, "recipe": "deploy_recipe"}
+if REG.get("deploy_recipe", {}).get("status") == "RUN":
+    MC_VAL = []
+    for nu in CFG["mc"]["nu_grid"]:
+        d_ = mc_eval("deploy_recipe", VM, nu, CFG["mc"]["eval_rows"])
+        MC_VAL.append({"nu": nu if nu else "normal", "coverage80": float(d_.in80.mean()), "coverage90": float(d_.in90.mean()),
+                       "brier_dd_mc": float(np.mean((d_.p_dd_mc - d_.dd) ** 2)), "brier_dd_head": float(np.mean((d_.p_dd_head - d_.dd) ** 2)), "n": len(d_)})
+    MC_VAL = pd.DataFrame(MC_VAL); MC_VAL["score"] = (MC_VAL.coverage80 - 0.8).abs() + (MC_VAL.coverage90 - 0.9).abs()
+    MC_CFG["nu"] = int(CFG["mc"]["nu_grid"][int(MC_VAL.score.values.argmin())])
+    MC_VAL.to_csv(SUB["tables"] / "mc_calibration_val.csv", index=False); display(MC_VAL.round(3))
+    r_ex = int(np.flatnonzero(VM)[len(np.flatnonzero(VM)) // 2]); pr_ = load_pred("panel", "deploy_recipe")
+    sim = mc_simulate(float(P.close.values[r_ex]), P.sigma.values[r_ex], math.exp(pr_["vol_20"][r_ex]), pr_["dir_20"][r_ex], nu=MC_CFG["nu"], n_paths=4000)
+    fig, ax = plt.subplots(figsize=(8, 3.6)); x_ = np.arange(1, 21)
+    ax.fill_between(x_, sim["quantiles"][0], sim["quantiles"][4], alpha=0.2, label="5-95 %"); ax.fill_between(x_, sim["quantiles"][1], sim["quantiles"][3], alpha=0.35, label="25-75 %")
+    ax.plot(x_, sim["quantiles"][2], label="median"); ax.plot(x_, sim["paths"][:25].T, lw=0.4, color="grey", alpha=0.5)
+    ax.set_title(f"Monte Carlo example: {P.ticker.values[r_ex]} {P.date.values[r_ex].astype('datetime64[D]')} (nu = {MC_CFG['nu'] or 'normal'}, P(DD>10%) = {sim['p_dd']:.2f})")
+    ax.legend(fontsize=7); ax.grid(alpha=0.3); plt.tight_layout(); savefig(fig, "mc_example_val.png"); plt.show()
+(SUB["results"] / "mc_config.json").write_text(json.dumps(MC_CFG))
+tick("21 monte carlo")

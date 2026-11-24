@@ -1,0 +1,8 @@
+check,passed
+purge_train_before_inner,True
+purge_inner_before_val,True
+purge_val_before_test,True
+test_labels_hidden,True
+unique_stock_dates,True
+eval_rows_non_overlapping_5,True
+labels_ignore_past_bars,True

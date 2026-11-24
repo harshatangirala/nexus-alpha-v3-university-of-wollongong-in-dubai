@@ -1,0 +1,298 @@
+# %% [markdown]
+## 2. Install packages, configuration, Drive, secrets and reproducibility tools
+
+Colab ships PyTorch, torchvision, transformers, scikit-learn, pandas, matplotlib and plotly. The cell adds the rest. Versions actually resolved are written to the freeze manifest (§22). GPU: A100 (40 or 80 GB) recommended; L4 works (2-3× slower); without a GPU, deep-model cells are recorded as **Not Run (no GPU)**, never as zeros.
+
+# %%
+import subprocess, sys, platform
+REQUIREMENTS = [
+    "timm>=1.0.15", "transformers>=4.48", "huggingface_hub>=0.26", "accelerate>=1.0", "peft>=0.13", "bitsandbytes>=0.45",
+    "sentencepiece>=0.2", "protobuf>=4.25", "ultralytics>=8.3.94,<8.4", "lightgbm>=4.3", "reportlab>=4.2", "streamlit>=1.40",
+    "yfinance>=0.2.54", "onnxruntime", "pandas_market_calendars>=4.4", "lxml>=5.0", "pyarrow>=15",
+    "scikit-learn>=1.4", "plotly>=5.20",
+]
+_pip = subprocess.run([sys.executable, "-m", "pip", "install", "-q", *REQUIREMENTS], capture_output=True, text=True)
+print(_pip.stdout[-1500:] if _pip.returncode == 0 else _pip.stderr[-4000:])
+if _pip.returncode != 0:
+    raise RuntimeError("Package installation failed (message above). Fix it, then re-run this cell.")
+# Screenshot OCR (dashboard only) is optional: try the old package, then its successor; the dashboard falls back to a typed ticker.
+OCR_PKG = None
+for _pkg in ("rapidocr_onnxruntime", "rapidocr"):
+    _r = subprocess.run([sys.executable, "-m", "pip", "install", "-q", _pkg], capture_output=True, text=True)
+    if _r.returncode == 0:
+        OCR_PKG = _pkg; break
+print("OCR package:", OCR_PKG or "none installed (dashboard will need the ticker typed in)")
+import torch
+print("Python", platform.python_version(), "| torch", torch.__version__, "| CUDA", torch.cuda.is_available())
+
+# %%
+import os, json, time, math, re, gc, random, hashlib, shutil, warnings, html, io, zipfile, traceback, itertools
+import datetime as dt
+from pathlib import Path
+from collections import defaultdict, Counter
+import numpy as np
+import pandas as pd
+import matplotlib
+import matplotlib.pyplot as plt
+import torch.nn as nn
+import torch.nn.functional as F
+import requests
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics import confusion_matrix
+import joblib
+import lightgbm as lgb
+from IPython.display import display, Markdown
+
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", message=".*X does not have valid feature names.*")
+pd.set_option("display.width", 220); pd.set_option("display.max_columns", 50)
+
+# ======================================================================== RUN MODE
+RUN_MODE = "QUICK_VERIFY"        # "QUICK_VERIFY" first (pipeline check), then "FULL_RESEARCH" (the study). Never mix outputs.
+assert RUN_MODE in ("QUICK_VERIFY", "FULL_RESEARCH")
+QUICK = RUN_MODE == "QUICK_VERIFY"
+FORCE_RERUN = False              # True ignores saved stage manifests and recomputes everything
+RUN_FINGPT = True                # FinGPT on Meta's gated Llama-2 (access granted). If it fails it is recorded as Not Run; the rest continues
+FINGPT_QLORA = False             # optional QLoRA fine-tune of FinGPT (about +1.5 h on an A100); off by default (frozen use only)
+
+STUDY = {   # sector -> 10 tickers (6 replacements vs the brief: see section 0)
+    "Information Technology": ["AAPL", "MSFT", "NVDA", "TXN", "INTC", "CSCO", "ORCL", "QCOM", "AMD", "ADBE"],
+    "Financials":             ["JPM", "BAC", "WFC", "C", "GS", "MS", "V", "MA", "BRK.B", "SCHW"],
+    "Health Care":            ["UNH", "JNJ", "LLY", "PFE", "MRK", "ABT", "TMO", "AMGN", "GILD", "CVS"],
+    "Consumer Discretionary": ["AMZN", "HD", "MCD", "NKE", "SBUX", "F", "LOW", "TJX", "MAR", "ROST"],
+    "Communication Services": ["GOOG", "NFLX", "DIS", "T", "VZ", "META", "OMC", "TTWO", "NYT", "LYV"],
+}
+RESERVES = {"Information Technology": ["ADI", "MU", "IBM", "INTU"], "Financials": ["AXP", "PNC", "USB", "BLK"],
+            "Health Care": ["MDT", "BMY", "DHR", "ISRG"], "Consumer Discretionary": ["EBAY", "YUM", "ORLY"],
+            "Communication Services": ["IMAX"]}
+REPLACED = {"AVGO": "TXN", "CRM": "ADBE", "BKNG": "MAR", "CMCSA": "META", "TMUS": "OMC", "EA": "NYT", "GOOGL": "GOOG"}
+# SEC CIKs (first = current filer; later entries = earlier filers of the same company inside the window)
+CIKS = {"AAPL": [320193], "MSFT": [789019], "NVDA": [1045810], "TXN": [97476], "INTC": [50863], "CSCO": [858877],
+        "ORCL": [1341439], "QCOM": [804328], "AMD": [2488], "ADBE": [796343], "JPM": [19617], "BAC": [70858], "WFC": [72971],
+        "C": [831001], "GS": [886982], "MS": [895421], "V": [1403161], "MA": [1141391], "BRK.B": [1067983], "SCHW": [316709],
+        "UNH": [731766], "JNJ": [200406], "LLY": [59478], "PFE": [78003], "MRK": [310158], "ABT": [1800], "TMO": [97745],
+        "AMGN": [318154], "GILD": [882095], "CVS": [64803], "AMZN": [1018724], "HD": [354950], "MCD": [63908], "NKE": [320187],
+        "SBUX": [829224], "F": [37996], "LOW": [60667], "TJX": [109198], "MAR": [1048286], "ROST": [745732],
+        "GOOG": [1652044], "NFLX": [1065280], "DIS": [1744489, 1001039], "T": [732717], "VZ": [732712], "META": [1326801],
+        "OMC": [29989], "TTWO": [946581], "NYT": [71691], "LYV": [1335258],
+        "ADI": [6281], "MU": [723125], "IBM": [51143], "INTU": [896878], "AXP": [4962], "PNC": [713676], "USB": [36104],
+        "BLK": [2012383, 1364742], "MDT": [1613103], "BMY": [14272], "DHR": [313616], "ISRG": [1035267], "EBAY": [1065088],
+        "YUM": [1041061], "ORLY": [898173], "IMAX": [921582]}
+DATA_ZIP_NAME = "nav3_bars_66.zip"
+DATA_MANIFEST_SHA256 = "7eb91001d27916661fad13b5d0e7b77f7aa6147504379b4433d6490e15736da5"
+
+CFG = {
+    "project": "NEXUS Alpha v3", "run_mode": RUN_MODE,
+    "quick_per_sector": 2,
+    # ---- targets
+    "horizons": [5, 10, 20, 40], "classes": ["DOWN", "SIDEWAYS", "UP"], "k_sideways": 0.5, "sigma_window": 60,
+    "dd_threshold": -0.10, "tz": "America/New_York",
+    # ---- calendar and blocks (by decision date)
+    "warmup_start": "2014-06-01", "decision_start": "2016-10-10", "data_end": "2026-10-09",
+    "blocks": {"train": ["2016-10-10", "2020-12-31"], "inner": ["2021-01-01", "2021-12-31"],
+               "val": ["2022-01-01", "2023-12-31"], "test": ["2024-01-01", "2026-10-09"]},
+    "purge_sessions": 40, "eval_stride": 5, "train_stride": 5 if QUICK else 1,
+    # ---- SEC rule for substitutions (section 3) and download
+    "sec_min_counts": {"10-K": 8, "10-Q": 20, "8-K": 10},
+    "sec": {"forms": ["10-K", "10-Q", "8-K"], "start": "2015-06-01", "public_lag_min": 5, "processing_min": 30,
+            "date_only_time_et": "17:30", "max_rps": 8, "max_exhibits_8k": 1, "quick_8k_stride": 3,
+            "max_chars": 60000, "lookback_sessions": {"8-K": 20, "periodic": 90}},
+    # ---- charts
+    "chart": {"size": 224, "bars": {"W": 52, "D": 63, "H": 70}},
+    # ---- CV models (timm ids, ImageNet weights; ultralytics YOLOv8s-cls)
+    "cv_models": {
+        "jkx_cnn":   {"kind": "jkx", "label": "Custom CNN (JKX-style, scratch)", "lr_grid": [3e-4, 1e-3]},
+        "resnet50":  {"kind": "timm", "timm": "resnet50.a1_in1k", "label": "ResNet-50", "lr_grid": [1e-4, 3e-4]},
+        "effnet_b0": {"kind": "timm", "timm": "efficientnet_b0.ra_in1k", "label": "EfficientNet-B0", "lr_grid": [2e-4, 5e-4]},
+        "convnext_t": {"kind": "timm", "timm": "convnext_tiny.in12k_ft_in1k", "label": "ConvNeXt-Tiny", "lr_grid": [5e-5, 1e-4]},
+        "vit_b16":   {"kind": "timm", "timm": "vit_base_patch16_224.augreg2_in21k_ft_in1k", "label": "ViT-B/16", "lr_grid": [2e-5, 5e-5]},
+        "swin_t":    {"kind": "timm", "timm": "swin_tiny_patch4_window7_224.ms_in1k", "label": "Swin-T", "lr_grid": [3e-5, 1e-4]},
+        "yolov8_cls": {"kind": "yolo", "weights": "yolov8s-cls.pt", "label": "YOLOv8s-cls", "lr_grid": [1e-4, 3e-4]},
+    },
+    "yolo_det_repo": "foduucom/stockmarket-pattern-detection-yolov8",
+    "cv_ft": {"epochs": 1 if QUICK else 6, "patience": 2, "batch": 64, "lr_head": 1e-3, "wd": 0.05, "warmup_frac": 0.05,
+              "probe_frac": 0.25, "loss_w": {"dir": 1.0, "vol": 0.5, "dd": 0.5}, "aug": True},
+    # ---- NLP models (Hugging Face ids)
+    "nlp_models": {
+        "finbert":   {"hf": "ProsusAI/finbert", "label": "FinBERT", "max_len": 512, "lr_grid": [2e-5, 3e-5], "batch": 16, "accum": 1},
+        "secbert":   {"hf": "nlpaueb/sec-bert-base", "label": "SEC-BERT", "max_len": 512, "lr_grid": [2e-5, 3e-5], "batch": 16, "accum": 1},
+        "roberta_l": {"hf": "FacebookAI/roberta-large", "label": "RoBERTa-large", "max_len": 512, "lr_grid": [1e-5, 2e-5], "batch": 8, "accum": 2},
+        "longformer": {"hf": "allenai/longformer-base-4096", "label": "Longformer-4096", "max_len": 4096, "lr_grid": [2e-5, 3e-5], "batch": 2, "accum": 8},
+        "deberta_l": {"hf": "microsoft/deberta-v3-large", "label": "DeBERTa-v3-large", "max_len": 512, "lr_grid": [8e-6, 1.5e-5], "batch": 8, "accum": 2, "amp": False},
+        "fingpt":    {"hf": "FinGPT/fingpt-mt_llama2-7b_lora", "base": "meta-llama/Llama-2-7b-hf", "label": "FinGPT (Llama-2-7B LoRA)",
+                      "max_len": 1024, "frozen_only": True},
+    },
+    "nlp_ft": {"epochs": 1 if QUICK else 3, "patience": 1, "lr_head": 1e-3, "wd": 0.01, "warmup_frac": 0.06, "probe_frac": 0.5,
+               "frozen_chunks": 4, "chunk_len": 512},
+    "tfidf": {"max_features": 50000, "ngram": [1, 2], "min_df": 5, "max_chars": 60000},
+    # ---- heads on frozen features
+    "probe": {"pca_per_view": 32, "pca_text": 32, "C_grid": [0.003, 0.03, 0.3], "alpha_grid": [1.0, 10.0, 100.0], "max_fit_rows": 15000},
+    # ---- inference
+    "bootstrap_B": 200 if QUICK else 1000, "alpha": 0.05, "fusion_w_grid": [0.0, 0.25, 0.5, 0.75, 1.0], "top_k": 3,
+    "mc": {"nu_grid": [3, 4, 6, 10, 0], "n_paths": 2000, "eval_rows": 600 if QUICK else 2000, "horizon": 20},
+    "deploy_max_params_m": 600,
+    "seed": 11,
+}
+HORIZONS = CFG["horizons"]; CLASSES = CFG["classes"]; NY = CFG["tz"]; VIEWS = ["W", "D", "H"]
+SECTORS = list(STUDY)
+TASKS = [f"{k}_{h}" for k in ("dir", "vol", "dd") for h in HORIZONS]
+TASK_LABEL = {"dir": "Direction (3-class)", "vol": "Volatility (log RV)", "dd": "Drawdown > 10%"}
+PRIMARY = {"dir": "macro_f1", "vol": "r2", "dd": "auc"}
+
+def set_seed(s: int):
+    random.seed(s); np.random.seed(s); torch.manual_seed(s); torch.cuda.manual_seed_all(s)
+set_seed(CFG["seed"])
+DEV = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+HAS_GPU = DEV.type == "cuda"
+AMP_DTYPE = torch.bfloat16 if (HAS_GPU and torch.cuda.is_bf16_supported()) else torch.float16
+GPU_GB = torch.cuda.get_device_properties(0).total_memory / 2**30 if HAS_GPU else 0.0
+GPU_NAME = torch.cuda.get_device_name(0) if HAS_GPU else "none"
+print(f"RUN_MODE={RUN_MODE} | device={DEV} {GPU_NAME} ({GPU_GB:.0f} GB) | AMP={AMP_DTYPE}")
+
+# %%
+# ======================================================================== Drive, folders, secrets
+IN_COLAB = "google.colab" in sys.modules
+if IN_COLAB:
+    from google.colab import drive
+    drive.mount("/content/drive")
+    DRIVE_ROOT = Path("/content/drive/MyDrive/antigravity_workspace/nexus_alpha_v3")
+    LOCAL_ROOT = Path("/content/nav3_local")
+else:
+    print("NOTE: not in Colab. The validated path is Colab; local runs are unsupported.")
+    DRIVE_ROOT = Path.cwd() / "nav3_drive"; LOCAL_ROOT = Path.cwd() / "nav3_local"
+DATA_DIR = DRIVE_ROOT / "data"
+ART = DRIVE_ROOT / f"artifacts_{RUN_MODE.lower()}"
+SUB = {k: ART / k for k in ["manifests", "preds", "models", "features", "figures", "tables", "results", "reports", "app", "logs"]}
+for p_ in [DATA_DIR, LOCAL_ROOT, *SUB.values()]:
+    p_.mkdir(parents=True, exist_ok=True)
+STAMP = "QUICK_VERIFY - NOT RESEARCH RESULTS" if QUICK else "FULL_RESEARCH"
+print("Drive root:", DRIVE_ROOT, "| artifacts:", ART)
+
+def get_secret(name: str):
+    """Colab Secrets first, then environment variables. Values are never printed or saved."""
+    if os.environ.get(name):
+        return os.environ[name]
+    if IN_COLAB:
+        try:
+            from google.colab import userdata
+            return userdata.get(name)
+        except Exception:
+            return None
+    return None
+HF_TOKEN = get_secret("HF_TOKEN"); SEC_USER_AGENT = get_secret("SEC_USER_AGENT")
+print("HF_TOKEN present:", bool(HF_TOKEN), "| SEC_USER_AGENT present:", bool(SEC_USER_AGENT))
+if not SEC_USER_AGENT:
+    raise RuntimeError("Add the Colab secret SEC_USER_AGENT ('Your Name your.email@domain') and switch Notebook access ON. "
+                       "EDGAR refuses anonymous requests.")
+if HF_TOKEN:
+    os.environ["HF_TOKEN"] = HF_TOKEN
+else:
+    print("WARNING: no HF_TOKEN: public models still download; FinGPT (gated Llama-2) will be Not Run.")
+
+# %%
+# ======================================================================== manifests, resume, registry, timers
+def cfg_hash(obj) -> str:
+    return hashlib.sha256(json.dumps(obj, sort_keys=True, default=str).encode()).hexdigest()[:16]
+
+def sha256_file(p) -> str:
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+def fingerprint(p) -> str:
+    """SHA-256 for files up to 64 MB; larger files: size + first and last MB (fast)."""
+    p = Path(p); size = p.stat().st_size; h = hashlib.sha256()
+    with open(p, "rb") as f:
+        if size <= 64 * 2**20:
+            h.update(f.read())
+        else:
+            h.update(f.read(2**20)); f.seek(size - 2**20); h.update(f.read(2**20)); h.update(str(size).encode())
+    return h.hexdigest()[:24]
+
+def now_utc() -> str:
+    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+class Stage:
+    """A stage is skipped on resume only if its config hash and every output fingerprint still match its manifest."""
+    def __init__(self, name: str, config, outputs):
+        self.name, self.h = name, cfg_hash(config)
+        self.outputs = [Path(o) for o in outputs]
+        self.mpath = SUB["manifests"] / f"stage_{name}.json"
+        self.t0 = time.time()
+    def done(self) -> bool:
+        if FORCE_RERUN or not self.mpath.exists():
+            return False
+        m = json.loads(self.mpath.read_text())
+        if m.get("config_hash") != self.h:
+            print(f"[{self.name}] configuration changed -> recompute"); return False
+        for o in self.outputs:
+            if not o.exists() or m.get("outputs", {}).get(str(o)) != fingerprint(o):
+                print(f"[{self.name}] output missing or changed ({o.name}) -> recompute"); return False
+        print(f"[{self.name}] resumed from saved outputs (config {self.h})"); return True
+    def finish(self, **extra):
+        m = {"stage": self.name, "config_hash": self.h, "run_mode": RUN_MODE, "finished_utc": now_utc(),
+             "seconds": round(time.time() - self.t0, 1), "outputs": {str(o): fingerprint(o) for o in self.outputs}, **extra}
+        self.mpath.write_text(json.dumps(m, indent=1, default=str))
+
+REG = {}
+REG_PATH = SUB["results"] / "experiments.json"
+if REG_PATH.exists() and not FORCE_RERUN:
+    REG.update(json.loads(REG_PATH.read_text()))
+def register(mid: str, **fields):
+    rec = REG.get(mid, {}); rec.update({"model_id": mid, "run_mode": RUN_MODE, "updated_utc": now_utc(), **fields})
+    REG[mid] = rec; REG_PATH.write_text(json.dumps(REG, indent=1, default=str)); return rec
+def not_run(mid: str, reason: str, **fields):
+    """A skipped experiment appears as 'Not Run' in every table, never as a zero."""
+    print(f"NOT RUN  {mid}: {reason}")
+    return register(mid, status="NOT_RUN", reason=reason, **fields)
+def failed(mid: str, err: BaseException, **fields):
+    tb = traceback.format_exc()[-3000:]
+    print(f"FAILED   {mid}: {type(err).__name__}: {err}\n{tb}")
+    (SUB["logs"] / f"failed_{mid}.txt").write_text(tb)
+    return register(mid, status="FAILED", reason=f"{type(err).__name__}: {str(err)[:300]}", **fields)
+
+TIMER = {"_t0": time.time()}
+def tick(section: str):
+    TIMER[section] = round((time.time() - TIMER["_t0"]) / 60, 2); TIMER["_t0"] = time.time()
+    (SUB["results"] / "timer.json").write_text(json.dumps({k: v for k, v in TIMER.items() if k != "_t0"}, indent=1))
+
+def savefig(fig, name: str, dpi: int = 130):
+    if QUICK:
+        fig.text(0.995, 0.005, STAMP, ha="right", va="bottom", fontsize=7, color="#b91c1c")
+    fig.savefig(SUB["figures"] / name, dpi=dpi, bbox_inches="tight")
+
+# %%
+# ======================================================================== the test vault (procedural seal)
+FREEZE_PATH = SUB["results"] / "freeze_manifest.json"
+VAULT_LOG = SUB["results"] / "test_openings.json"
+class TestVault:
+    """Test-block outcomes live here, not in the working tables. Opening needs the freeze manifest written in section 22;
+    every opening is appended to test_openings.json (re-openings are disclosed in the reports)."""
+    def __init__(self):
+        self._store = {}
+    def deposit(self, name: str, df: pd.DataFrame):
+        """Refuses an all-NaN deposit (that would mean the labels were already hidden, i.e. a cell was re-run out of order)."""
+        vals = df.drop(columns=[c for c in ("row", "ev") if c in df.columns])
+        if len(df) and not vals.notna().any().any():
+            raise RuntimeError(f"Vault deposit '{name}' has no labels: cells were re-run out of order. "
+                               "Restart the runtime (Runtime > Restart session) and Run all from the top.")
+        self._store[name] = df.copy()
+    def has(self, name: str) -> bool:
+        return name in self._store
+    def open(self, name: str) -> pd.DataFrame:
+        if name not in self._store:
+            raise RuntimeError(f"The vault has no '{name}' in this session (section 2 was re-run after section 4/14). Restart and Run all.")
+        if not FREEZE_PATH.exists():
+            raise RuntimeError("The test block is locked: run section 22 (freeze) first.")
+        log = json.loads(VAULT_LOG.read_text()) if VAULT_LOG.exists() else []
+        log.append({"item": name, "utc": now_utc(), "freeze_sha256": sha256_file(FREEZE_PATH)[:16], "run_mode": RUN_MODE})
+        VAULT_LOG.write_text(json.dumps(log, indent=1))
+        return self._store[name].copy()
+VAULT = TestVault()
+print("Registry entries:", len(REG), "| freeze manifest exists:", FREEZE_PATH.exists())
+tick("2 setup")

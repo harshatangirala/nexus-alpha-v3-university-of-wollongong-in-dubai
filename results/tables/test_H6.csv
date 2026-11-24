@@ -1,0 +1,4 @@
+target,statistic,p,n_perm,family,supported
+dir,0.0008389044610227355,0.07462686567164178,200,H6 sector x model interaction,False
+vol,0.025466140864985738,0.014925373134328358,200,H6 sector x model interaction,True
+dd,0.00768866762506033,0.004975124378109453,200,H6 sector x model interaction,True

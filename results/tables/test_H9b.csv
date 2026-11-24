@@ -1,0 +1,13 @@
+family,task,A,B,n,delta,lo,hi,p,p_holm,supported,verdict
+H9b best NLP combination vs best single NLP model (filing events),dir_5,nlp_combo_best,deberta_l_ft,2162,0.0,0.0,0.0,1.0,1.0,False,no clear difference
+H9b best NLP combination vs best single NLP model (filing events),dir_10,nlp_combo_best,secbert_ft,2156,0.0,0.0,0.0,1.0,1.0,False,no clear difference
+H9b best NLP combination vs best single NLP model (filing events),dir_20,nlp_combo_best,secbert_ft,2140,0.0,0.0,0.0,1.0,1.0,False,no clear difference
+H9b best NLP combination vs best single NLP model (filing events),dir_40,nlp_combo_best,fingpt_frozen,2108,0.0,0.0,0.0,1.0,1.0,False,no clear difference
+H9b best NLP combination vs best single NLP model (filing events),vol_5,nlp_combo_best,finbert_ft,2162,-0.044298371643033185,-0.09467533007080295,0.007460990902511313,0.1038961038961039,1.0,False,no clear difference
+H9b best NLP combination vs best single NLP model (filing events),vol_10,nlp_combo_best,finbert_ft,2156,-0.05943151665328372,-0.11948184124111268,-0.0016448342192025827,0.04795204795204795,0.5274725274725275,False,no clear difference
+H9b best NLP combination vs best single NLP model (filing events),vol_20,nlp_combo_best,finbert_ft,2140,-0.05676123039215808,-0.11279390280853142,-0.0015187315854380576,0.03996003996003996,0.4795204795204795,False,no clear difference
+H9b best NLP combination vs best single NLP model (filing events),vol_40,nlp_combo_best,finbert_ft,2108,-0.03713662867123979,-0.08365033791619368,0.007869721655650742,0.12787212787212787,1.0,False,no clear difference
+H9b best NLP combination vs best single NLP model (filing events),dd_5,nlp_combo_best,longformer_ft,2162,-0.02577734815530852,-0.07151505912984735,0.012929070239749693,0.24975024975024976,1.0,False,no clear difference
+H9b best NLP combination vs best single NLP model (filing events),dd_10,nlp_combo_best,longformer_ft,2156,-0.0011401822722577615,-0.007338616715450425,0.00579600708763106,0.6953046953046953,1.0,False,no clear difference
+H9b best NLP combination vs best single NLP model (filing events),dd_20,nlp_combo_best,longformer_ft,2140,0.0,0.0,0.0,1.0,1.0,False,no clear difference
+H9b best NLP combination vs best single NLP model (filing events),dd_40,nlp_combo_best,longformer_ft,2108,-0.01475486746422705,-0.03611228425351101,0.008995371882039442,0.2177822177822178,1.0,False,no clear difference

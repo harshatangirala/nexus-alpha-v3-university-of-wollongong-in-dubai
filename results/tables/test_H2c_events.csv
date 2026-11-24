@@ -1,0 +1,13 @@
+family,task,A,B,n,delta,lo,hi,p,p_holm,supported,verdict
+H2c best NLP (filing events) vs strongest no-text baseline,dir_5,deberta_l_ft,company_event,2162,-0.0060794684488352235,-0.03367826117807843,0.018925165436958616,0.6133866133866134,1.0,False,no clear difference
+H2c best NLP (filing events) vs strongest no-text baseline,dir_10,secbert_ft,company_event,2156,-0.01147762973057459,-0.05432900247040864,0.032358436410816635,0.5534465534465535,1.0,False,no clear difference
+H2c best NLP (filing events) vs strongest no-text baseline,dir_20,secbert_ft,company_event,2140,0.08567619025100931,0.023547340434016597,0.14378738610087027,0.003996003996003996,0.03196803196803197,True,better
+H2c best NLP (filing events) vs strongest no-text baseline,dir_40,fingpt_frozen,company_event,2108,0.012152294031638033,-0.0123601250026023,0.0404331982798486,0.35564435564435565,1.0,False,no clear difference
+H2c best NLP (filing events) vs strongest no-text baseline,vol_5,finbert_ft,tech_event,2162,-0.35390675890587575,-0.45512262233558337,-0.27355303606701076,0.001998001998001998,0.023976023976023976,False,worse
+H2c best NLP (filing events) vs strongest no-text baseline,vol_10,finbert_ft,tech_event,2156,-0.3792164038520819,-0.4766465873091138,-0.2926441242857536,0.001998001998001998,0.023976023976023976,False,worse
+H2c best NLP (filing events) vs strongest no-text baseline,vol_20,finbert_ft,simple_event,2140,-0.3943203599078354,-0.48300958632619106,-0.3078747194522363,0.001998001998001998,0.023976023976023976,False,worse
+H2c best NLP (filing events) vs strongest no-text baseline,vol_40,finbert_ft,simple_event,2108,-0.35870082754867727,-0.4412768196855774,-0.2797216980103347,0.001998001998001998,0.023976023976023976,False,worse
+H2c best NLP (filing events) vs strongest no-text baseline,dd_5,longformer_ft,tech_event,2162,-0.058243294511399646,-0.15005996199374055,0.03289876108693643,0.24175824175824176,1.0,False,no clear difference
+H2c best NLP (filing events) vs strongest no-text baseline,dd_10,longformer_ft,simple_event,2156,-0.06362530890832785,-0.14165140338781088,0.0072381294045494125,0.07792207792207792,0.5454545454545454,False,no clear difference
+H2c best NLP (filing events) vs strongest no-text baseline,dd_20,longformer_ft,simple_event,2140,-0.004392067988668535,-0.07224064299627042,0.05463164715323047,0.8831168831168831,1.0,False,no clear difference
+H2c best NLP (filing events) vs strongest no-text baseline,dd_40,longformer_ft,simple_event,2108,0.012124410892883741,-0.05160801645659826,0.06658254707578305,0.6873126873126874,1.0,False,no clear difference

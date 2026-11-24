@@ -1,0 +1,175 @@
+# %% [markdown]
+## 10. Computer-vision models, part 2: fine-tuning (transfer learning, step 2)
+
+### 10.1 Training strategy (identical for all seven models)
+* **Input:** the three charts of a row (W, D, H), palette → RGB, normalised with each backbone's own pretraining mean/std.
+* **Loss:** multi-task sum over the 4 horizons: cross-entropy (direction) + 0.5 × mean squared error on standardised log-volatility + 0.5 × binary cross-entropy (drawdown). No class weights (they would distort calibrated probabilities; macro-F1 is handled by calibration and evaluation).
+* **Optimiser:** AdamW, weight decay 0.05 (not on norms and biases), backbone learning rate from the probe below, head learning rate 1e-3, 5 % linear warm-up then cosine decay, gradient clipping at 1.0, bfloat16 mixed precision, batch 64 rows (192 images).
+* **Epochs and early stopping:** up to 6 epochs; after each epoch the loss on the **inner block (2021)** is computed and the best epoch's weights are kept (patience 2). Validation (2022-23) is never used for stopping, so it stays a fair selection set.
+* **Augmentation (training only), chosen to respect what a chart means:** small vertical rescale/shift (±5 % / ±4 %: price scale is arbitrary), dropping up to 8 % of the oldest bars on the left (the newest bars, which carry the decision, are never cut), brightness ±10 %, light pixel noise. **Forbidden:** horizontal flips (they reverse time), vertical flips (they turn rallies into crashes), random crops of the right edge, rotations.
+* **Hyperparameter tuning (10.2):** for each model, two backbone learning rates (from the usual range for that architecture) are each trained for one epoch on a random 25 % of the training rows; the one with the lower inner-block loss is used for the full run. Probe results are saved.
+* **Ablations:** ResNet-50 without augmentation; ResNet-50 from random initialisation (pretrained vs scratch).
+
+# %%
+FT = CFG["cv_ft"]
+MICRO = FT["batch"] if GPU_GB >= 30 else FT["batch"] // 2
+VOL_MU = np.array([np.nanmean(Y[f"vol_{h}"][TR]) for h in HORIZONS]); VOL_SD = np.array([np.nanstd(Y[f"vol_{h}"][TR]) for h in HORIZONS])
+Y_DIR = np.stack([Y[f"dir_{h}"] for h in HORIZONS], 1).astype(np.float32)
+Y_VOLZ = ((np.stack([Y[f"vol_{h}"] for h in HORIZONS], 1) - VOL_MU) / VOL_SD).astype(np.float32)
+Y_DD = np.stack([Y[f"dd_{h}"] for h in HORIZONS], 1).astype(np.float32)
+
+def mt_loss(out, yd, yv, yq, w=FT["loss_w"]):
+    md, mv, mq = torch.isfinite(yd), torch.isfinite(yv), torch.isfinite(yq)
+    l = out["dir"].new_zeros(())
+    if md.any():
+        l = l + w["dir"] * F.cross_entropy(out["dir"][md].float(), yd[md].long())
+    if mv.any():
+        l = l + w["vol"] * F.mse_loss(out["vol"][mv].float(), yv[mv])
+    if mq.any():
+        l = l + w["dd"] * F.binary_cross_entropy_with_logits(out["dd"][mq].float(), yq[mq])
+    return l
+
+def label_tensors(rb):
+    return tuple(torch.from_numpy(a[rb]).to(DEV) for a in (Y_DIR, Y_VOLZ, Y_DD))
+
+def augment(x):
+    """x: (B, V, 3, H, W) in [0, 1]. Vertical rescale/shift, left-side (oldest-bar) crop, brightness and noise."""
+    b, v = x.shape[:2]; z = x.flatten(0, 1); n = z.shape[0]; d = z.device
+    sy = 1 + (torch.rand(n, device=d) * 0.10 - 0.05); ty = torch.rand(n, device=d) * 0.08 - 0.04
+    crop = torch.rand(n, device=d) * 0.08
+    theta = torch.zeros(n, 2, 3, device=d)
+    theta[:, 0, 0] = 1 - crop; theta[:, 0, 2] = crop; theta[:, 1, 1] = sy; theta[:, 1, 2] = ty
+    grid = F.affine_grid(theta, list(z.shape), align_corners=False)
+    z = F.grid_sample(z, grid, mode="bilinear", padding_mode="border", align_corners=False)
+    z = z * (0.9 + 0.2 * torch.rand(n, 1, 1, 1, device=d)) + 0.01 * torch.randn_like(z)
+    return z.clamp(0, 1).view(b, v, *z.shape[1:])
+
+def batch_images(rb, palette=None):
+    return to_float_images(torch.from_numpy(np.ascontiguousarray(IMG[rb])).to(DEV, non_blocking=True), PAL_DARK_T if palette is None else palette)
+
+@torch.no_grad()
+def eval_loss(net, rows, batch=256):
+    net.eval(); tot, n = 0.0, 0
+    for s in range(0, len(rows), batch):
+        rb = rows[s: s + batch]
+        with torch.autocast("cuda", dtype=AMP_DTYPE):
+            out = net(batch_images(rb))
+        tot += float(mt_loss(out, *label_tensors(rb))) * len(rb); n += len(rb)
+    return tot / max(1, n)
+
+def param_groups(net, lr_backbone, lr_head, wd):
+    g = {"bd": [], "bn": [], "hd": [], "hn": []}
+    for n_, p in net.named_parameters():
+        if not p.requires_grad:
+            continue
+        key = ("h" if n_.startswith("head.") else "b") + ("n" if p.ndim <= 1 else "d")
+        g[key].append(p)
+    return [{"params": g["bd"], "lr": lr_backbone, "weight_decay": wd}, {"params": g["bn"], "lr": lr_backbone, "weight_decay": 0.0},
+            {"params": g["hd"], "lr": lr_head, "weight_decay": wd}, {"params": g["hn"], "lr": lr_head, "weight_decay": 0.0}]
+
+def train_chartnet(spec, lr, rows_tr, rows_es, epochs, pretrained=True, aug=True, seed=0, tag=""):
+    set_seed(seed); rng = np.random.default_rng(seed)
+    net = ChartNet(spec, pretrained=pretrained).to(DEV)
+    opt = torch.optim.AdamW(param_groups(net, lr, FT["lr_head"], FT["wd"]))
+    scaler = torch.amp.GradScaler("cuda", enabled=AMP_DTYPE == torch.float16)     # needed only on fp16 GPUs (T4)
+    B = FT["batch"]; spe = math.ceil(len(rows_tr) / B); total = max(1, epochs * spe); warm = max(1, int(FT["warmup_frac"] * total))
+    sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda s: (s + 1) / warm if s < warm else 0.5 * (1 + math.cos(math.pi * (s - warm) / max(1, total - warm))))
+    hist, best, best_state, bad, t0 = [], np.inf, None, 0, time.time()
+    for ep in range(epochs):
+        net.train(); perm = rng.permutation(rows_tr); run, k = 0.0, 0
+        for s in range(0, len(perm), B):
+            rb_all = np.sort(perm[s: s + B]); opt.zero_grad(set_to_none=True); tot = 0.0
+            for c0 in range(0, len(rb_all), MICRO):            # micro-batches: same effective batch on smaller GPUs
+                rb = rb_all[c0: c0 + MICRO]
+                x = batch_images(rb)
+                if aug:
+                    x = augment(x)
+                with torch.autocast("cuda", dtype=AMP_DTYPE):
+                    loss = mt_loss(net(x), *label_tensors(rb)) * (len(rb) / len(rb_all))
+                scaler.scale(loss).backward(); tot += float(loss)
+            scaler.unscale_(opt); torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0); scaler.step(opt); scaler.update(); sched.step()
+            run += tot; k += 1
+        es = eval_loss(net, rows_es)
+        hist.append({"epoch": ep + 1, "train_loss": run / max(1, k), "inner_loss": es, "minutes": round((time.time() - t0) / 60, 2)})
+        print(f"  {tag} epoch {ep + 1}/{epochs}: train {run / max(1, k):.4f} | inner {es:.4f} | {hist[-1]['minutes']} min")
+        if es < best - 1e-5:
+            best, bad = es, 0
+            best_state = {k_: v.detach().to("cpu", copy=True) for k_, v in net.state_dict().items()}
+        else:
+            bad += 1
+            if bad >= FT["patience"]:
+                break
+    if best_state is not None:
+        net.load_state_dict(best_state)
+    return net, hist, best, round((time.time() - t0) / 60, 2)
+
+ROWS_TR = np.flatnonzero(TR & np.isfinite(Y_DIR).all(1))
+ROWS_IN = np.flatnonzero(IN)
+ROWS_PRED = np.flatnonzero(IN | VA | TE)          # rows that receive predictions (test outputs stay unscored until section 23)
+CV_FT_IDS = {name: f"{name}_ft" for name in CFG["cv_models"]}
+LR_PROBE, CURVES = [], {}
+
+def run_cv_finetune(name, spec, mid, pretrained=True, aug=True, lr_fixed=None, seed=0):
+    mpath = SUB["models"] / f"cv_{mid}.pt"
+    st = Stage(f"cv_{mid}", [spec, FT, pretrained, aug, lr_fixed, N, CFG["blocks"], int(TR.sum())], [mpath, _pred_path("panel", mid)])
+    if st.done() and have_pred("panel", mid):
+        CURVES[mid] = REG[mid].get("history", []); return
+    if not HAS_GPU:
+        not_run(mid, "no GPU"); return
+    try:
+        if lr_fixed is not None:
+            lr = lr_fixed
+        elif QUICK or len(spec["lr_grid"]) == 1:
+            lr = spec["lr_grid"][0]
+        else:
+            rng = np.random.default_rng(1)
+            sub_rows = np.sort(rng.choice(ROWS_TR, int(FT["probe_frac"] * len(ROWS_TR)), replace=False))
+            losses = {}
+            for lr_ in spec["lr_grid"]:
+                net, _, l_, mins = train_chartnet(spec, lr_, sub_rows, ROWS_IN, 1, pretrained, aug, seed, tag=f"{mid} probe lr={lr_:g}")
+                losses[lr_] = l_; LR_PROBE.append({"model": mid, "lr": lr_, "inner_loss": l_, "minutes": mins})
+                del net; torch.cuda.empty_cache()
+            lr = min(losses, key=lambda z: losses[z])
+        torch.cuda.reset_peak_memory_stats()
+        net, hist, best, mins = train_chartnet(spec, lr, ROWS_TR, ROWS_IN, FT["epochs"], pretrained, aug, seed, tag=mid)
+        peak = round(torch.cuda.max_memory_allocated() / 2**30, 2)
+        torch.save({"state_dict": net.state_dict(), "spec": spec, "vol_mu": VOL_MU, "vol_sd": VOL_SD, "lr": lr, "pretrained": pretrained,
+                    "aug": aug, "history": hist}, mpath)
+        out = chart_raw_outputs(net, IMG[ROWS_PRED], PAL_DARK_T, VOL_MU, VOL_SD, DEV, amp_dtype=AMP_DTYPE)
+        raw = {}
+        for t in TASKS:
+            a = np.full((N, 3) if t.startswith("dir") else N, np.nan); a[ROWS_PRED] = out[t]; raw[t] = a
+        n_par = sum(p.numel() for p in net.parameters())
+        finalize(PANEL, mid, raw, "cv_ft", backbone=name, lr=lr, epochs_run=len(hist), best_inner_loss=best, history=hist,
+                 train_minutes=mins, peak_gpu_gb=peak, params_m=round(n_par / 1e6, 2), pretrained=pretrained, aug=aug,
+                 label=spec["label"] + ("" if pretrained else " (random init)") + ("" if aug else " (no augmentation)"))
+        CURVES[mid] = hist; st.finish()
+        print(f"{mid}: val primary (20d)", {t: round(v, 3) for t, v in REG[mid]["val_primary"].items() if v is not None and t.endswith("_20")})
+        del net
+    except Exception as e:
+        failed(mid, e)
+    gc.collect(); torch.cuda.empty_cache()
+
+for name, spec in CFG["cv_models"].items():
+    run_cv_finetune(name, spec, CV_FT_IDS[name])
+if not QUICK:
+    run_cv_finetune("resnet50", CFG["cv_models"]["resnet50"], "resnet50_ft_noaug", aug=False, lr_fixed=REG.get("resnet50_ft", {}).get("lr"))
+    run_cv_finetune("resnet50", CFG["cv_models"]["resnet50"], "resnet50_scratch", pretrained=False, lr_fixed=1e-3)
+if LR_PROBE:
+    pd.DataFrame(LR_PROBE).to_csv(SUB["tables"] / "cv_lr_probe.csv", index=False); display(pd.DataFrame(LR_PROBE))
+
+# %% [markdown]
+### 10.4 Training curves (over-/under-fitting check)
+A falling training loss with a rising inner loss means over-fitting; early stopping keeps the epoch with the lowest inner loss. Flat curves at the prior's loss mean the network found nothing to learn.
+
+# %%
+_ft = [m for m in list(CV_FT_IDS.values()) + ["resnet50_ft_noaug", "resnet50_scratch"] if REG.get(m, {}).get("history")]
+if _ft:
+    fig, axes = plt.subplots(1, len(_ft), figsize=(3.0 * len(_ft), 2.8), squeeze=False)
+    for a_, m in zip(axes[0], _ft):
+        h_ = pd.DataFrame(REG[m]["history"])
+        a_.plot(h_.epoch, h_.train_loss, "o-", label="train"); a_.plot(h_.epoch, h_.inner_loss, "s-", label="inner (early stop)")
+        a_.set_title(m, fontsize=8); a_.set_xlabel("epoch"); a_.grid(alpha=0.3)
+    axes[0][0].legend(fontsize=7); plt.tight_layout(); savefig(fig, "cv_training_curves.png"); plt.show()
+    pd.concat([pd.DataFrame(REG[m]["history"]).assign(model=m) for m in _ft]).to_csv(SUB["tables"] / "cv_training_curves.csv", index=False)
+tick("10 cv finetune")

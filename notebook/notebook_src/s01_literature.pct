@@ -1,0 +1,44 @@
+# %% [markdown]
+## 1. Problem, literature, research gap and pre-registered hypotheses
+
+### 1.1 Problem and why it matters
+Investors look at charts and read company filings. Two questions follow for AI: can a vision model read a candlestick chart well enough to forecast **where the price goes** (direction), **how much it moves** (volatility) and **whether it falls hard** (a drawdown of more than 10%)? Can a language model do the same from a **10-K, 10-Q or 8-K filing**? And is the combination better than either? Risk teams care most about volatility and drawdown (position sizing, stop-losses); traders care about direction. A clear, leakage-free answer, including a clear "no", is useful because many retail tools claim chart or text "AI signals" without out-of-sample evidence.
+
+### 1.2 What earlier work found, and the gap
+* **Chart images.** Jiang, Kelly and Xiu (2023, *J. Finance* 78(6)) trained a CNN on OHLC images of US stocks and reported return predictability beyond momentum, mostly at short horizons and for small firms. Sezer and Ozbayoglu (2019) and Ho and Huang (2021, *Sensors*) used candlestick images with CNNs on few stocks. Modern backbones (ResNet, He et al. 2016; EfficientNet, Tan and Le 2019; ConvNeXt, Liu et al. 2022; ViT, Dosovitskiy et al. 2021; Swin, Liu et al. 2021; YOLO, Redmon et al. 2016 / Ultralytics 2023) were built for photographs; whether ImageNet features transfer to synthetic charts is an open empirical question. Our own TriFrame study found images add ~0 to numeric features for volatility and drawdown on 500 stocks.
+* **Filing text.** Loughran and McDonald (2011, 2016) showed finance-specific word lists matter; Tetlock (2007), Cohen, Malloy and Nguyen (2020, "Lazy Prices") and Ke, Kelly and Xiu (2019) found text predicts returns, mainly slowly and for small firms. 8-K items carry news of different importance (Lerman and Livnat 2010). Transformers: FinBERT (Araci 2019; Huang, Wang and Yang 2023), SEC-BERT (Loukas et al. 2022), RoBERTa (Liu et al. 2019), Longformer (Beltagy et al. 2020), DeBERTa-v3 (He et al. 2023), FinGPT (Yang et al. 2023) on Llama-2 (Touvron et al. 2023). **Look-ahead bias** in pre-trained language models is a documented problem (Glasserman and Lin 2023; Sarkar and Vafa 2024): a model pre-trained on text written after the test date can "know" the outcome.
+* **Gap.** We found no study that compares, on **identical leakage-controlled rows**, (i) seven vision architectures on **tri-timeframe** (weekly, daily, hourly) candlestick charts with (ii) six language models on **point-in-time** SEC filings, across **four horizons and three targets**, **by sector**, with a test period that starts **after every language model's pre-training cut-off**, and with a deployable dashboard evaluated by the same rules.
+
+**Contribution (what is new and defensible).** A controlled benchmark answering the ten project questions with paired, month-block bootstrap confidence intervals and Holm-corrected tests; an event study of which filing types and 8-K items move prices in which sectors; a reproducible pipeline (hash-verified data, frozen selections, single test opening); and a dashboard whose outputs follow the tested recipe, including a "no call" rule when direction skill is not validated.
+
+### 1.3 Why these models (model selection)
+| Model | Inductive bias | Role |
+|---|---|---|
+| Custom CNN (JKX-style) | small, local filters, trained from scratch | academic baseline: is ImageNet pre-training needed at all? |
+| ResNet-50 | residual connections ease deep optimisation | industry-standard pretrained baseline |
+| EfficientNet-B0 | compound scaling, depthwise convs: accuracy per FLOP | efficiency end of the spectrum |
+| ConvNeXt-Tiny | CNN modernised with transformer design choices | modern CNN |
+| ViT-B/16 | global self-attention over 16×16 patches, weak locality prior | tests whether long-range chart structure matters |
+| Swin-T | windowed attention, hierarchical | middle ground between CNN locality and ViT globality |
+| YOLOv8 | CSP-Darknet backbone built for detection | "pattern detector" family; detector weights used zero-shot |
+| TF-IDF + linear | bag of n-grams | the hard-to-beat financial-text baseline |
+| FinBERT / SEC-BERT | BERT-base, finance / SEC-domain pre-training | does domain pre-training help? |
+| RoBERTa-large / DeBERTa-v3-large | larger general encoders | does scale help? |
+| Longformer-4096 | sparse attention, 8× longer input | does reading more of a long filing help? |
+| FinGPT (7B) | decoder LLM with finance instruction LoRA | do LLM representations help? |
+
+### 1.4 Pre-registered hypotheses and decision rules (fixed before any data were loaded)
+All tests are on the **locked test block (2024-01 → 2026-08)**, after selections are frozen in §22. Confidence intervals: paired bootstrap over calendar-month blocks (B = 1000; Künsch 1989), α = 0.05, Holm correction within each family. "Skill" means: direction macro-F1 above the **shuffled-prediction null** (same predictions, labels permuted within month, which keeps class shares); volatility R² of log realised volatility above 0; drawdown ROC-AUC above 0.5.
+
+| Id | Hypothesis | Supported if |
+|---|---|---|
+| H1 | The validation-chosen CV model has skill (per target × horizon, 12 tests) | Holm-adjusted CI excludes the null |
+| H2 | The validation-chosen NLP model has skill on filing events (12 tests) | same |
+| H3 | CV+NLP fusion beats the better single modality (per target × horizon) | paired Δ CI > 0 after Holm |
+| H4 | Top-3 CV + top-3 NLP beats top-3 CV alone (Q10) | paired Δ CI > 0 after Holm |
+| H5 | Fine-tuning beats frozen features (per CV model, on the composite score) | paired Δ CI > 0 after Holm |
+| H6 | Model rankings differ by sector beyond chance (Q5) | stock-level permutation p < 0.05 |
+| H7 | Filings move prices more than ordinary days, and the effect differs by form (Q6) | |abnormal move| CI on filing days above non-filing days; Kruskal-Wallis p < 0.05 |
+| R1 (reference) | Vision/text models beat the simple baselines (momentum, HAR, trailing volatility) and the technical-indicator LightGBM | reported, not a selection criterion |
+
+**Selection rule (validation only).** Per task (target × horizon) the model with the best validation primary metric wins (macro-F1, R², ROC-AUC). The **overall** CV and NLP rankings use the mean rank over the 12 tasks. Ensembles: equal-weight averages of calibrated outputs (no weights fitted, so no extra over-fitting), members chosen on validation. Fusion weights: grid {0, 0.25, 0.5, 0.75, 1} chosen on validation.

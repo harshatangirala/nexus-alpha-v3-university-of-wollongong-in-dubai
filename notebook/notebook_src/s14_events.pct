@@ -1,0 +1,155 @@
+# %% [markdown]
+## 14. Filing events: tradeable labels and the event study (Q6, Q7, Q9)
+
+**Entry rule (no look-ahead).** A filing becomes usable at its availability time. Entry is the **open of the first hourly bar that starts after it** (bars start 09:30, 10:30 … 15:30 New York); a filing available after 15:30 or outside market hours enters at the next session's 09:30 open. Event targets for horizon h use the same definitions as the panel, measured from the entry price: direction over sessions *s … s+h−1* (close of the last one), realised volatility of the h sessions after the entry session, and a >10 % drawdown from the entry price (lows of the remaining bars of the entry session and of the next h−1 sessions). The sideways band uses σ known before the filing.
+
+**Market reaction (event study, descriptive).** "Pre" = the last close before availability. Abnormal return AR₂ = log return of the stock minus SPY from pre to the close of the session after the entry session (2 sessions); scaled by the stock's pre-event daily abnormal volatility, |z| = |AR₂| / (σ_AR √2) measures surprise in "normal-day units". Also: abnormal volume (log of entry-session volume over the 20-session median before) and the post-event volatility ratio (log of mean session RV over the 5 sessions from entry vs the 20 before). **Control:** the same measures on random **non-filing** sessions of the same stocks and years (no filing within ±3 sessions).
+
+The study below uses development blocks only (train + inner + validation); the test block is replicated in §23.5.
+
+# %%
+CLOSE_T = pd.Timedelta(hours=16)
+EVR = []
+for t in TICKERS:
+    d, hb = BARS_D[t], BARS_H[t]
+    dates = pd.DatetimeIndex(d["date"]); c, lo, vol_ = d["close"].values, d["low"].values, d["volume"].values
+    close_utc = (dates + CLOSE_T).tz_localize(NY).tz_convert("UTC")
+    hstart = hb["timestamp"].values.astype("datetime64[ns]"); hs_sess = pd.DatetimeIndex(hb["session"])
+    h_didx = np.searchsorted(dates.values, hs_sess.values)
+    lr = np.r_[np.nan, np.diff(np.log(c))]
+    spy = SPY_D.set_index("date")["close"].reindex(dates).ffill().values
+    ar = lr - np.r_[np.nan, np.diff(np.log(spy))]
+    sig = pd.Series(lr).rolling(SIGW, min_periods=SIGW).std().values
+    sig_ar = pd.Series(ar).rolling(SIGW, min_periods=SIGW).std().values
+    rvs = session_rv(d, hb)
+    for fid, f in FIL[FIL.ticker == t].iterrows():
+        av = f["available_utc"].tz_convert("UTC").tz_localize(None).to_datetime64()
+        pre = int(np.searchsorted(close_utc.tz_localize(None).values, av, side="right")) - 1
+        k = int(np.searchsorted(hstart, av, side="left"))
+        if pre < SIGW or k >= len(hstart):
+            continue
+        s = int(h_didx[k]); entry = float(hb["open"].values[k])
+        row = {"fil_id": int(fid), "ticker": t, "form": f["form"], "sector": SECTOR_OF[t], "items": f["items"], "section": f["section"],
+               "entry_date": dates[s], "entry_hour": pd.Timestamp(hstart[k]).tz_localize("UTC").tz_convert(NY).hour, "pre_idx": pre,
+               "s_idx": s, "g": CAL_POS.get(dates[s], -1), "sigma": sig[pre], "session_bucket": f["session_bucket"]}
+        for h in HORIZONS:
+            e = s + h - 1
+            if e + 1 >= len(c):
+                row.update({f"ret_{h}": np.nan, f"dir_{h}": np.nan, f"vol_{h}": np.nan, f"dd_{h}": np.nan}); continue
+            r = math.log(c[e] / entry); thr = K_SIDE * sig[pre] * math.sqrt(h)
+            row[f"ret_{h}"] = r; row[f"dir_{h}"] = 2.0 if r > thr else (0.0 if r < -thr else 1.0)
+            row[f"vol_{h}"] = 0.5 * math.log(max(float(np.nansum(rvs[s + 1: s + h + 1])), 1e-12) * 252.0 / h)
+            low_same = hb["low"].values[k: np.searchsorted(h_didx, s, side="right")]
+            mn = min(float(low_same.min()) if len(low_same) else entry, float(lo[s + 1: e + 1].min()) if e >= s + 1 else entry)
+            row[f"dd_{h}"] = float(mn / entry - 1 <= DDT)
+        if s + 1 < len(c) and np.isfinite(sig_ar[pre]):
+            ar2 = float(np.nansum(ar[pre + 1: s + 2]))
+            row.update({"ar2": ar2, "abs_z": abs(ar2) / (sig_ar[pre] * math.sqrt(max(1, s + 1 - pre))),
+                        "abn_volume": math.log((vol_[s] + 1) / (np.median(vol_[max(0, pre - 19): pre + 1]) + 1)),
+                        "post_vol_ratio": math.log((np.nanmean(rvs[s: s + 5]) + 1e-12) / (np.nanmean(rvs[max(0, pre - 19): pre + 1]) + 1e-12))})
+        EVR.append(row)
+EV = pd.DataFrame(EVR)
+EV = EV[EV["g"] >= 0].copy()
+EV["block"] = None
+for b in BLOCK_ORDER:
+    EV.loc[(EV.entry_date >= BLK[b][0]) & (EV.entry_date <= BLK[b][1]), "block"] = b
+EV["block"] = EV["block"].fillna("pre_study")          # filings before 2016-10-10: context for the panel only, no labels used
+for b, nxt in zip(BLOCK_ORDER[:-1], BLOCK_ORDER[1:]):
+    g_next = int(np.searchsorted(CAL.values, np.datetime64(BLK[nxt][0])))
+    EV.loc[(EV.block == b) & (EV.g + HMAX >= g_next), "block"] = f"{b}_purged"
+EV = EV.reset_index(drop=True); EV["ev"] = np.arange(len(EV))
+EV["month"] = EV["entry_date"].dt.to_period("M").astype(str)
+EV_LABELS = [f"{k}_{h}" for k in ("ret", "dir", "vol", "dd") for h in HORIZONS]
+REACT_COLS = ["ar2", "abs_z", "abn_volume", "post_vol_ratio"]
+for c_ in REACT_COLS:
+    if c_ not in EV:
+        EV[c_] = np.nan
+TE_EV = (EV.block == "test").values
+VAULT.deposit("event_labels", EV.loc[TE_EV, ["ev", *EV_LABELS, *REACT_COLS]])
+EV.loc[TE_EV, EV_LABELS + REACT_COLS] = np.nan
+YE = {k: EV[k].values.astype(float).copy() for k in EV_LABELS}
+EVENT = EvalCtx("event", YE, EV["month"].values, EV["block"].values, EV["sector"].values, EV["ticker"].values)
+EVENT.fit_priors(EVENT.mask["train"])
+EV_TEXT = [text_input(f, s_, FIL.at[i, "section_text"], CFG["sec"]["max_chars"]) for f, s_, i in zip(EV.form, EV.section, EV.fil_id)]
+print("Events by block:", EV.block.value_counts().to_dict())
+display(EV.groupby(["block", "form"]).size().unstack().fillna(0).astype(int))
+assert np.isnan(EV.loc[TE_EV, EV_LABELS].values).all(), "test event labels are not hidden"
+assert (EV.entry_date.values >= np.array([FIL.at[i, "available_utc"].tz_convert(NY).tz_localize(None).normalize() for i in EV.fil_id], dtype="datetime64[ns]")).all(), "entry before availability"
+
+# %%
+# ---------------------------------------------------------------- matched non-filing sessions (control for H7)
+rng = np.random.default_rng(11); CTRL = []
+for t in TICKERS:
+    d = BARS_D[t]; c = d["close"].values; dates = pd.DatetimeIndex(d["date"])
+    lr = np.r_[np.nan, np.diff(np.log(c))]
+    spy = SPY_D.set_index("date")["close"].reindex(dates).ffill().values
+    ar = lr - np.r_[np.nan, np.diff(np.log(spy))]
+    sig_ar = pd.Series(ar).rolling(SIGW, min_periods=SIGW).std().values
+    busy = np.zeros(len(d), bool)
+    for s in EV.loc[EV.ticker == t, "s_idx"]:
+        busy[max(0, s - 3): s + 4] = True
+    ok = np.flatnonzero(~busy & (dates >= BLK["train"][0]) & (dates <= BLK["val"][1]) & np.isfinite(sig_ar))
+    ok = ok[ok + 2 < len(d)]
+    for s in rng.choice(ok, min(len(ok), 4 * int((EV.ticker == t).sum())), replace=False):
+        ar2 = float(np.nansum(ar[s: s + 2]))
+        CTRL.append({"ticker": t, "sector": SECTOR_OF[t], "form": "no filing", "month": str(dates[s].to_period("M")),
+                     "abs_z": abs(ar2) / (sig_ar[s - 1] * math.sqrt(2)), "abn_volume": math.log((d["volume"].values[s] + 1) / (np.median(d["volume"].values[max(0, s - 20): s]) + 1))})
+CTRL = pd.DataFrame(CTRL)
+
+# %% [markdown]
+### 14.1 Event study on the development blocks
+
+# %%
+from scipy.stats import kruskal, mannwhitneyu
+def mean_ci(df, col, B=None, seed=0):
+    x = df[col].values.astype(float); ok = np.isfinite(x)
+    if ok.sum() < 10:
+        return np.nan, np.nan, np.nan
+    groups = month_groups(df["month"].values[ok]); xs = x[ok]
+    bs = bootstrap(lambda ix: float(np.mean(xs[ix])), groups, B=B or min(CFG["bootstrap_B"], 500), seed=seed)
+    return float(xs.mean()), float(np.percentile(bs, 2.5)), float(np.percentile(bs, 97.5))
+
+def event_study(ev, ctrl):
+    rows = []
+    for name, g in list(ev.groupby("form")) + [("no filing (control)", ctrl)]:
+        m, lo_, hi_ = mean_ci(g, "abs_z")
+        rows.append({"group": name, "n": int(np.isfinite(g["abs_z"]).sum()), "mean_abs_z": m, "ci_lo": lo_, "ci_hi": hi_,
+                     "share_abs_z_gt_2": float((g["abs_z"] > 2).mean()), "mean_abn_volume": float(g["abn_volume"].mean()),
+                     "mean_post_vol_ratio": float(g["post_vol_ratio"].mean()) if "post_vol_ratio" in g else np.nan})
+    tab = pd.DataFrame(rows)
+    fx = [g["abs_z"].dropna().values for _, g in ev.groupby("form")]
+    kw = kruskal(*fx) if len(fx) >= 2 and all(len(x) > 5 for x in fx) else None
+    mw = mannwhitneyu(ev["abs_z"].dropna(), ctrl["abs_z"].dropna(), alternative="greater") if len(ctrl) else None
+    return tab, (float(kw.pvalue) if kw else np.nan), (float(mw.pvalue) if mw else np.nan)
+
+DEV_EV = EV[EV.block.isin(["train", "inner", "val"])]
+ES_FORM, KW_P_DEV, MW_P_DEV = event_study(DEV_EV, CTRL)
+ES_FORM.to_csv(SUB["tables"] / "event_study_by_form_dev.csv", index=False); display(ES_FORM.round(3))
+print(f"H7 (development): filing days vs non-filing days, one-sided Mann-Whitney p = {MW_P_DEV:.2g}; forms differ (Kruskal-Wallis) p = {KW_P_DEV:.2g}")
+ES_SECTOR = DEV_EV.groupby(["sector", "form"])["abs_z"].agg(["mean", "size"]).reset_index()
+ctrl_sec = CTRL.groupby("sector")["abs_z"].mean()
+ES_SECTOR["excess_over_non_filing_days"] = ES_SECTOR["mean"] - ES_SECTOR["sector"].map(ctrl_sec)
+ES_SECTOR.to_csv(SUB["tables"] / "event_study_sector_form_dev.csv", index=False)
+items_ev = DEV_EV[DEV_EV.form == "8-K"].assign(item=DEV_EV["items"].str.split(",")).explode("item")
+items_ev["item"] = items_ev["item"].str.strip()
+items_ev = items_ev[items_ev["item"].isin(ITEM_COUNTS.index[:14]) & (items_ev["item"] != "9.01")]
+ES_ITEMS = pd.DataFrame([{"item": it, "n": len(g), **dict(zip(["mean_abs_z", "ci_lo", "ci_hi"], mean_ci(g, "abs_z"))),
+                          "mean_abn_volume": float(g["abn_volume"].mean())} for it, g in items_ev.groupby("item") if len(g) >= 15],
+                        columns=["item", "n", "mean_abs_z", "ci_lo", "ci_hi", "mean_abn_volume"]).sort_values("mean_abs_z", ascending=False)
+ES_ITEMS.to_csv(SUB["tables"] / "event_study_8k_items_dev.csv", index=False); display(ES_ITEMS.round(3))
+ES_BUCKET = DEV_EV.groupby(["form", "session_bucket"])["abs_z"].agg(["mean", "size"]).round(3)
+ES_BUCKET.to_csv(SUB["tables"] / "event_study_timing_dev.csv")
+fig, ax = plt.subplots(1, 3, figsize=(17, 4))
+ax[0].errorbar(ES_FORM.group, ES_FORM.mean_abs_z, yerr=[ES_FORM.mean_abs_z - ES_FORM.ci_lo, ES_FORM.ci_hi - ES_FORM.mean_abs_z], fmt="o", capsize=4)
+ax[0].set_title("Mean |abnormal 2-day move| in normal-day units (95 % CI)"); ax[0].grid(alpha=0.3)
+hm = ES_SECTOR.pivot(index="sector", columns="form", values="excess_over_non_filing_days")
+ax[1].imshow(hm.values, cmap="Reds", aspect="auto")
+for i in range(hm.shape[0]):
+    for j in range(hm.shape[1]):
+        ax[1].text(j, i, f"{hm.values[i, j]:+.2f}", ha="center", va="center", fontsize=8)
+ax[1].set_xticks(range(hm.shape[1])); ax[1].set_xticklabels(hm.columns); ax[1].set_yticks(range(hm.shape[0])); ax[1].set_yticklabels(hm.index, fontsize=7)
+ax[1].set_title("Sector × form: mean |z| minus non-filing days")
+if len(ES_ITEMS):
+    ax[2].barh(ES_ITEMS["item"].astype(str), ES_ITEMS["mean_abs_z"]); ax[2].invert_yaxis(); ax[2].set_title("8-K items: mean |z|")
+plt.tight_layout(); savefig(fig, "event_study_dev.png"); plt.show()
+tick("14 events")

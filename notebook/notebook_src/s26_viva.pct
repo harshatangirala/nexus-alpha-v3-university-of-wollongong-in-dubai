@@ -1,0 +1,46 @@
+# %% [markdown]
+## 26. Viva preparation, limitations and future work
+
+**Answer every question with the run's own numbers** (`results/final_results.json`, the three PDFs). Prepared answers to the checklist questions:
+
+| Question | Short answer (where the evidence is) |
+|---|---|
+| Why this problem? | Chart and text "AI signals" are widely sold; a leakage-free, sector-aware comparison tells users what is real (§1.1). |
+| What gap? | No study compares 7 vision and 6 language models on identical point-in-time rows across 4 horizons, 3 targets and 5 sectors, with a test period after all LM pre-training cut-offs (§1.2). |
+| Why this dataset? | Verified hourly, daily and weekly bars (SHA-256 checked, 0 missing sessions) plus EDGAR filings with acceptance timestamps; 6 tickers replaced for lack of 10-year hourly data (§0, §3). |
+| How was leakage prevented? | Decision at the close; images and indicators tested by truncation and future-bar perturbation; 40-session purge; test labels in a vault opened only after a hashed freeze; filings usable only after acceptance + 35 min; entry at the next hourly open; test after LM cut-offs (§4.1, §5, §6.2, §14, §19, §22). |
+| Preprocessing / augmentation? | Fixed-format 224 px charts, per-backbone normalisation; augmentation that preserves time order (no flips). Text: HTML cleaning, MD&A extraction, [form][section] tags, chunking (§6, §10.1, §13). |
+| How does convolution / attention work here? | §9.1 and §16.1. |
+| Why these architectures? | Table §1.3: from scratch vs pretrained, CNN vs transformer, small vs large, short vs long context, encoder vs LLM. |
+| Transfer learning? | Frozen features (§9.2, §16.2) vs full fine-tuning (§10, §17); H5 tests whether fine-tuning helps. |
+| Loss, optimiser, tuning? | Multi-task CE + MSE + BCE; AdamW, warm-up + cosine; two-value learning-rate probe per model; regularisation chosen on 2021 (§10, §17). |
+| Over-fitting? | Training vs inner-loss curves, early stopping, the label-shuffle control (§10.4, §17.4, §9.3). |
+| Why these metrics? | Macro-F1 + log loss for 3 classes; R² + QLIKE for volatility; ROC-AUC + PR-AUC + Brier skill + ECE for rare drawdowns (§7). |
+| Comparison with baselines? | Prior, momentum, HAR, trailing volatility, TF-IDF, technical LightGBM; random-weight CNN (§8, §9, §15). |
+| Ablations? | Views, frozen vs fine-tuned, pretrained vs scratch vs random, augmentation, text length, domain pre-training (§9.3, §12.4, §18.2). |
+| Which errors / conditions? | Volatility deciles, sectors, quarters, market direction, filing timing and length (§12.5, §18.4). |
+| Robustness? | Noise, blur, JPEG, light theme, screenshot resizing, missing hourly chart (§12.7). |
+| Why is your chart model worse than a trailing-volatility baseline on volatility? | Each chart's price axis is scaled to that chart's own high and low, which removes the absolute volatility level, and the vertical-rescale augmentation changes candle heights (augmentation ablation, §12.4). Post-hoc table H1c compares every task with the strongest numbers-only baseline (§23A). |
+| Isn't the text's drawdown signal just the company name? | A filing names the company and a company's usual volatility predicts its drawdown risk. §23A.1 trains per-company, numbers-only and LightGBM baselines on the same filings without text; H2c reports whether the best NLP model still beats them. |
+| Do charts and filings add anything to simple numbers? | H8 / H8b / H8c (§23A.2): the same LightGBM with technical features alone versus technical + CV, + NLP, + both. Added after the test was opened, so labelled post-hoc. |
+| Is the text gain for volatility just the earnings calendar? | H8d-H8f (§23A.2b): technical + filing-date columns, and + company one-hot, versus the same with text. The reports state which explanation the test supports. |
+| Your CV model beats the baselines on direction by up to 0.14 macro-F1 - is that fair? | No: the baselines predict mostly one class, which macro-F1 punishes. H1d compares each model's skill over its own shuffled null; quote that number. |
+| What is your accuracy? | Section 5b of the CV report: plain accuracy is about the same as always predicting SIDEWAYS, which is why macro-F1 and balanced accuracy over a shuffled null are the primary metrics; the edge is in finding UP and DOWN moves. Quote the 5b numbers. |
+| Why does TF-IDF beat the transformers, and was DeBERTa trained properly? | NLP report section 8: a few thousand training filings, every encoder peaks after one epoch, and DeBERTa-v3-large's early-stopping loss stayed far above the others (unstable fine-tuning at this data size); its frozen features are the fairer reading. |
+| Did you try combining networks? | §23B.1: all 63 equal-weight combinations of 1-3 networks within vision and within language, and every (1-3 vision) x (0-3 language) combination with a validation-chosen weight; H9a-H9d give the test verdicts. Quote whether combining was worth it per target. |
+| Is there anything in the words themselves? | §23B.2-23B.3: text change (Lazy Prices), Loughran-McDonald tone, and a reaction-size regression with and without the words beyond form, item, sector and timing (H10a, H10b, H11). |
+| Your words explain the reaction size - isn't that just the company name in the text? | H11 is run twice: metadata vs metadata + words, and metadata + company one-hot vs the same + words. Quote the company-controlled row; it is the fair one (§23B.3, NLP report 5e). |
+| What about ethics? | Ethics sections in all three reports: SEC fair access, licences (including AGPL for YOLOv8 and the Llama 2 licence), no personal data, look-ahead bias as an integrity issue, responsible-use statements. |
+| What would you do next? | The pre-registered v3.1 protocol (§23B.5, multimodal report section 10): new forward test period, seeds, fixed-scale charts, stabilised fine-tuning, QLoRA, news. |
+| Why were extra analyses added after the test? | A methodological review found the baselines too weak. They use the same locked test rows, models fitted on training and tuned on 2021 only, baselines chosen on validation; the original tables are unchanged (reproducibility check, §23A.5). |
+| Contribution? | A controlled, reproducible benchmark that answers Q1-Q10 with intervals, an event study of filing types and 8-K items by sector, and a dashboard that only claims what the test supports. |
+| Limitations? | Below. |
+| Deployment? | §24: the frozen recipe, parity-tested against the notebook; the no-call rule; Monte Carlo coverage checked on test. |
+
+**Limitations.** 50 large surviving US stocks (survivorship bias; results may not hold for small caps where Jiang, Kelly and Xiu found most image signal). One decade and one regime shift between validation (2022-23) and test (2024-26). Prices not dividend-adjusted. Direction labels are intrinsically noisy; a 3-class band hides magnitude. Charts are rebuilt from bars, so real screenshots are redrawn rather than read pixel by pixel. MD&A extraction is heuristic. FinGPT is used frozen by default. Event reactions mix filings with same-day news. Many choices were made on validation; only the locked test numbers are unbiased. No trading costs or portfolio evaluation (this is a forecasting study).
+
+**Future work.** Delisted and small-cap stocks; walk-forward refits each year; news text (minute-time-stamped) beside filings; alternative chart encodings (Gramian angular fields, returns images); calibrated position sizing from the volatility and drawdown heads with costs.
+
+# %%
+print("Run finished:", STAMP, "| reports:", [p_.name for p_ in REPORT_FILES])
+print("Runtime by section (minutes):", {k: v for k, v in TIMER.items() if k != "_t0"})

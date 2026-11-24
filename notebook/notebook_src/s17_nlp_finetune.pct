@@ -1,0 +1,178 @@
+# %% [markdown]
+## 17. Language models, part 2: fine-tuning on filing events
+
+### 17.1 Training strategy (same for all five encoders)
+Input `[form] [section] text`, truncated to the model's window (512 tokens; Longformer 4,096). Attention-masked mean pooling, the same multi-task head and loss as the CV models (direction CE + 0.5 × volatility MSE + 0.5 × drawdown BCE, 4 horizons). AdamW (weight decay 0.01), encoder learning rate from the probe, head 1e-3, 6 % warm-up then linear-cosine decay, bfloat16, gradient clipping 1.0, gradient checkpointing for the large and long models, effective batch 16 (micro-batch × accumulation). Up to 3 epochs with early stopping on the **inner-block filings** (patience 1). Fine-tuning a 355-435 M-parameter model on a few thousand noisy labels can over-fit fast: the probe, early stopping and the frozen comparison in §18 are the guard.
+
+### 17.2 Hyperparameter tuning
+Two encoder learning rates per model (typical ranges: base 2-3e-5, large 0.8-2e-5), one epoch each on half of the training filings, chosen by inner loss.
+
+# %%
+NFT = CFG["nlp_ft"]
+VOLE_MU = np.array([np.nanmean(YE[f"vol_{h}"][EVENT.mask["train"]]) for h in HORIZONS])
+VOLE_SD = np.array([np.nanstd(YE[f"vol_{h}"][EVENT.mask["train"]]) for h in HORIZONS])
+YE_DIR = np.stack([YE[f"dir_{h}"] for h in HORIZONS], 1).astype(np.float32)
+YE_VOLZ = ((np.stack([YE[f"vol_{h}"] for h in HORIZONS], 1) - VOLE_MU) / VOLE_SD).astype(np.float32)
+YE_DD = np.stack([YE[f"dd_{h}"] for h in HORIZONS], 1).astype(np.float32)
+ROWS_TR_EV = np.flatnonzero(EVENT.mask["train"] & np.isfinite(YE_DIR).all(1))
+ROWS_IN_EV = np.flatnonzero(EVENT.mask["inner"] & np.isfinite(YE_DIR).all(1))
+NLP_FT_IDS = {m: f"{m}_ft" for m in ENCODERS}
+NLP_LR_PROBE = []
+
+def ev_labels(rb):
+    return tuple(torch.from_numpy(a[rb]).to(DEV) for a in (YE_DIR, YE_VOLZ, YE_DD))
+
+def text_batches(tok, texts, rows, max_len, bs):
+    for s in range(0, len(rows), bs):
+        rb = rows[s: s + bs]
+        enc = tok([texts[i] for i in rb], truncation=True, max_length=max_len, padding=True, return_tensors="pt")
+        yield rb, enc["input_ids"].to(DEV), enc["attention_mask"].to(DEV)
+
+@torch.no_grad()
+def text_eval_loss(net, tok, texts, rows, max_len, bs, amp=True):
+    net.eval(); tot, n = 0.0, 0
+    for rb, ii, am in text_batches(tok, texts, rows, max_len, bs * 2):
+        with torch.autocast("cuda", dtype=AMP_DTYPE, enabled=amp):
+            o = net(ii, am)
+        tot += float(mt_loss(o, *ev_labels(rb))) * len(rb); n += len(rb)
+    return tot / max(1, n)
+
+def train_textnet(spec, lr, rows_tr, rows_es, epochs, seed=0, tag=""):
+    set_seed(seed); rng = np.random.default_rng(seed)
+    tok = AutoTokenizer.from_pretrained(spec["hf"])
+    big = spec["max_len"] > 512 or "large" in spec["hf"]
+    net = TextNet(spec["hf"], grad_ckpt=big).to(DEV)
+    texts = [t_[: spec["max_len"] * 8] for t_ in EV_TEXT]
+    groups = [{"params": [p for n_, p in net.named_parameters() if not n_.startswith("head.")], "lr": lr},
+              {"params": net.head.parameters(), "lr": NFT["lr_head"]}]
+    opt = torch.optim.AdamW(groups, weight_decay=NFT["wd"])
+    amp = spec.get("amp", True)                               # DeBERTa-v3 trains in full precision (unstable in 16-bit)
+    scaler = torch.amp.GradScaler("cuda", enabled=amp and AMP_DTYPE == torch.float16)
+    bs, acc = spec["batch"], spec["accum"]; n_bad = 0
+    total = max(1, epochs * math.ceil(len(rows_tr) / (bs * acc))); warm = max(1, int(NFT["warmup_frac"] * total))
+    sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda s: (s + 1) / warm if s < warm else 0.5 * (1 + math.cos(math.pi * (s - warm) / max(1, total - warm))))
+    hist, best, best_state, bad, t0 = [], np.inf, None, 0, time.time()
+    for ep in range(epochs):
+        net.train(); run, k, j = 0.0, 0, 0
+        opt.zero_grad(set_to_none=True)
+        for rb, ii, am in text_batches(tok, texts, rng.permutation(rows_tr), spec["max_len"], bs):
+            with torch.autocast("cuda", dtype=AMP_DTYPE, enabled=amp):
+                loss = mt_loss(net(ii, am), *ev_labels(rb)) / acc
+            if not torch.isfinite(loss):                       # numerical blow-up: skip the batch, count it, stop if persistent
+                n_bad += 1; opt.zero_grad(set_to_none=True)
+                if n_bad > 20:
+                    raise RuntimeError(f"{tag}: non-finite loss in more than 20 batches (training diverged)")
+                continue
+            scaler.scale(loss).backward(); run += float(loss) * acc; k += 1; j += 1
+            if j % acc == 0:
+                scaler.unscale_(opt); torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0); scaler.step(opt); scaler.update(); sched.step()
+                opt.zero_grad(set_to_none=True)
+        if j % acc:
+            scaler.unscale_(opt); torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0); scaler.step(opt); scaler.update(); sched.step()
+            opt.zero_grad(set_to_none=True)
+        es = text_eval_loss(net, tok, texts, rows_es, spec["max_len"], bs, amp)
+        if not np.isfinite(es):
+            raise RuntimeError(f"{tag}: inner-block loss is not finite (training diverged)")
+        hist.append({"epoch": ep + 1, "train_loss": run / max(1, k), "inner_loss": es, "minutes": round((time.time() - t0) / 60, 2)})
+        print(f"  {tag} epoch {ep + 1}/{epochs}: train {run / max(1, k):.4f} | inner {es:.4f} | {hist[-1]['minutes']} min")
+        if es < best - 1e-5:
+            best, bad = es, 0; best_state = {k_: v.detach().to("cpu", copy=True) for k_, v in net.state_dict().items()}
+        else:
+            bad += 1
+            if bad >= NFT["patience"]:
+                break
+    if best_state is not None:
+        net.load_state_dict(best_state)
+    return net, tok, texts, hist, best, round((time.time() - t0) / 60, 2)
+
+def run_nlp_finetune(m):
+    spec, mid = NLPC[m], NLP_FT_IDS[m]; mpath = SUB["models"] / f"nlp_{mid}.pt"
+    st = Stage(f"nlp_{mid}", [spec, NFT, N_EV, TEXT_KEY, len(ROWS_TR_EV)], [mpath, _pred_path("event", mid)])
+    if st.done() and have_pred("event", mid):
+        return
+    if not HAS_GPU:
+        not_run(mid, "no GPU"); return
+    try:
+        if QUICK or len(spec["lr_grid"]) == 1:
+            lr = spec["lr_grid"][0]
+        else:
+            sub = np.sort(np.random.default_rng(2).choice(ROWS_TR_EV, int(NFT["probe_frac"] * len(ROWS_TR_EV)), replace=False))
+            losses = {}
+            for lr_ in spec["lr_grid"]:
+                net, *_, l_, mins = train_textnet(spec, lr_, sub, ROWS_IN_EV, 1, tag=f"{mid} probe lr={lr_:g}")
+                losses[lr_] = l_; NLP_LR_PROBE.append({"model": mid, "lr": lr_, "inner_loss": l_, "minutes": mins}); del net; torch.cuda.empty_cache()
+            lr = min(losses, key=lambda z: losses[z])
+        torch.cuda.reset_peak_memory_stats()
+        net, tok, texts, hist, best, mins = train_textnet(spec, lr, ROWS_TR_EV, ROWS_IN_EV, NFT["epochs"], tag=mid)
+        torch.save({"state_dict": {k: v.half() if v.is_floating_point() else v for k, v in net.state_dict().items()}, "hf": spec["hf"],
+                    "max_len": spec["max_len"], "vol_mu": VOLE_MU, "vol_sd": VOLE_SD, "lr": lr, "history": hist, "amp": spec.get("amp", True)}, mpath)
+        t1 = time.time()
+        raw = text_raw_outputs(net, tok, texts, spec["max_len"], VOLE_MU, VOLE_SD, DEV, batch=spec["batch"] * 2, amp_dtype=AMP_DTYPE, use_amp=spec.get("amp", True))
+        docs_per_s = N_EV / max(1e-6, time.time() - t1)
+        finalize(EVENT, mid, raw, "nlp_ft", encoder=m, lr=lr, history=hist, best_inner_loss=best, train_minutes=mins,
+                 peak_gpu_gb=round(torch.cuda.max_memory_allocated() / 2**30, 2), params_m=round(sum(p.numel() for p in net.parameters()) / 1e6, 1),
+                 docs_per_s=round(docs_per_s, 1), max_len=spec["max_len"], label=spec["label"] + " (fine-tuned)")
+        st.finish()
+        print(f"{mid}: val primary (20d)", {t: round(v, 3) for t, v in REG[mid]["val_primary"].items() if v is not None and t.endswith("_20")})
+        del net
+    except Exception as e:
+        failed(mid, e)
+    gc.collect(); torch.cuda.empty_cache()
+
+for m in ENCODERS:
+    run_nlp_finetune(m)
+if NLP_LR_PROBE:
+    pd.DataFrame(NLP_LR_PROBE).to_csv(SUB["tables"] / "nlp_lr_probe.csv", index=False); display(pd.DataFrame(NLP_LR_PROBE))
+
+# %%
+# ---------------------------------------------------------------- optional: continue training FinGPT's LoRA (QLoRA) with the multi-task head
+class FinGPTMT(nn.Module):
+    def __init__(self, lm):
+        super().__init__(); self.lm = lm; self.head = MultiTaskHead(int(lm.config.hidden_size)).to(DEV)
+    def forward(self, input_ids, attention_mask):
+        h = self.lm(input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=True).hidden_states[-1].float()
+        m = attention_mask.unsqueeze(-1).float(); return self.head((h * m).sum(1) / m.sum(1).clamp(min=1))
+if FINGPT_QLORA and RUN_FINGPT and HAS_GPU and REG.get("fingpt_frozen", {}).get("status") == "RUN" and not have_pred("event", "fingpt_qlora"):
+    try:
+        tok_g, lm_g, _ = load_fingpt(trainable=True); net_g = FinGPTMT(lm_g)
+        prom = fingpt_inputs(tok_g, EV_TEXT, NLPC["fingpt"]["max_len"])
+        opt = torch.optim.AdamW([{"params": [p for p in lm_g.parameters() if p.requires_grad], "lr": 1e-4},
+                                 {"params": net_g.head.parameters(), "lr": 1e-3}], weight_decay=0.0)
+        rng = np.random.default_rng(0); t0 = time.time(); net_g.train(); j = 0
+        for rb, ii, am in text_batches(tok_g, prom, rng.permutation(ROWS_TR_EV), NLPC["fingpt"]["max_len"], 2):
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                loss = mt_loss(net_g(ii, am), *ev_labels(rb)) / 8
+            loss.backward(); j += 1
+            if j % 8 == 0:
+                torch.nn.utils.clip_grad_norm_([p for p in net_g.parameters() if p.requires_grad], 1.0); opt.step(); opt.zero_grad(set_to_none=True)
+        net_g.eval(); res = {"dir": [], "vol": [], "dd": []}
+        with torch.no_grad():
+            for rb, ii, am in text_batches(tok_g, prom, np.arange(N_EV), NLPC["fingpt"]["max_len"], 4):
+                with torch.autocast("cuda", dtype=torch.bfloat16):
+                    o = net_g(ii, am)
+                for k_ in res:
+                    res[k_].append(o[k_].float().cpu().numpy())
+        d_, v_, q_ = (np.concatenate(res[k_]) for k_ in ("dir", "vol", "dd"))
+        raw = {**{f"dir_{h}": d_[:, i] for i, h in enumerate(HORIZONS)}, **{f"vol_{h}": v_[:, i] * VOLE_SD[i] + VOLE_MU[i] for i, h in enumerate(HORIZONS)},
+               **{f"dd_{h}": q_[:, i] for i, h in enumerate(HORIZONS)}}
+        finalize(EVENT, "fingpt_qlora", raw, "nlp_ft", encoder="fingpt", train_minutes=round((time.time() - t0) / 60, 1),
+                 label="FinGPT (QLoRA, 1 epoch)", params_m=6738)
+        lm_g.save_pretrained(str(SUB["models"] / "fingpt_qlora_adapter")); del net_g, lm_g
+    except Exception as e:
+        failed("fingpt_qlora", e)
+    gc.collect(); torch.cuda.empty_cache()
+
+# %% [markdown]
+### 17.4 Training curves
+
+# %%
+_nft = [m for m in NLP_FT_IDS.values() if REG.get(m, {}).get("history")]
+if _nft:
+    fig, axes = plt.subplots(1, len(_nft), figsize=(3.2 * len(_nft), 2.8), squeeze=False)
+    for a_, m in zip(axes[0], _nft):
+        h_ = pd.DataFrame(REG[m]["history"])
+        a_.plot(h_.epoch, h_.train_loss, "o-", label="train"); a_.plot(h_.epoch, h_.inner_loss, "s-", label="inner")
+        a_.set_title(m, fontsize=8); a_.grid(alpha=0.3)
+    axes[0][0].legend(fontsize=7); plt.tight_layout(); savefig(fig, "nlp_training_curves.png"); plt.show()
+    pd.concat([pd.DataFrame(REG[m]["history"]).assign(model=m) for m in _nft]).to_csv(SUB["tables"] / "nlp_training_curves.csv", index=False)
+tick("17 nlp finetune")

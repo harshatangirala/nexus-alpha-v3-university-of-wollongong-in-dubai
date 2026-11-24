@@ -1,0 +1,8 @@
+model,mean_rank
+tfidf_lr,2.9166666666666665
+roberta_l_ft,3.5
+longformer_ft,3.875
+secbert_ft,4.25
+finbert_ft,4.291666666666667
+deberta_l_ft,4.5
+fingpt_frozen,4.666666666666667

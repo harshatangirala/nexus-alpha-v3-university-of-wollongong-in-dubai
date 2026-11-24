@@ -1,0 +1,13 @@
+# model weights and data (too large; produced by the notebook)
+*.pt
+*.pth
+*.joblib
+dashboard/models/
+data/
+# secrets and local files
+.streamlit/secrets.toml
+secrets.toml
+.env
+__pycache__/
+*.pyc
+.venv/

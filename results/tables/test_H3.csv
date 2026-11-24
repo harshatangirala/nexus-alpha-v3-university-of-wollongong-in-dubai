@@ -1,0 +1,13 @@
+family,task,A,B,n,delta,lo,hi,p,p_holm,supported
+H3 fusion vs better single modality,dir_5,fusion_late_best,convnext_t_ft,6550,0.0,0.0,0.0,1.0,1.0,False
+H3 fusion vs better single modality,dir_10,fusion_late_best,convnext_t_ft,6550,0.0,0.0,0.0,1.0,1.0,False
+H3 fusion vs better single modality,dir_20,fusion_late_top3,convnext_t_ft,6550,-0.0067755061218338075,-0.02335114647131114,0.009985745563559086,0.41358641358641357,1.0,False
+H3 fusion vs better single modality,dir_40,fusion_late_best,effnet_b0_ft,6550,0.0,0.0,0.0,1.0,1.0,False
+H3 fusion vs better single modality,vol_5,fusion_late_top3,swin_t_ft,6550,0.06399771282633382,0.04057344798376052,0.09026651997672044,0.001998001998001998,0.023976023976023976,True
+H3 fusion vs better single modality,vol_10,fusion_late_top3,vit_b16_ft,6550,0.05282111188174976,0.03187170218138255,0.07637018898016579,0.001998001998001998,0.023976023976023976,True
+H3 fusion vs better single modality,vol_20,fusion_late_top3,deberta_l_panel_frozen,6550,0.1588779339029226,0.10167101819482856,0.21537989813035188,0.001998001998001998,0.023976023976023976,True
+H3 fusion vs better single modality,vol_40,fusion_late_top3,deberta_l_panel_frozen,6550,0.1110709284034983,0.07542901012988415,0.1495901494358149,0.001998001998001998,0.023976023976023976,True
+H3 fusion vs better single modality,dd_5,fusion_late_top3,deberta_l_panel_frozen,6550,0.053171835259957834,0.03124276899459911,0.0841180657981626,0.001998001998001998,0.023976023976023976,True
+H3 fusion vs better single modality,dd_10,fusion_late_top3,roberta_l_panel_frozen,6550,0.0034151114064721044,-0.012545356724523078,0.022505716343668793,0.7812187812187812,1.0,False
+H3 fusion vs better single modality,dd_20,fusion_late_top3,longformer_panel_frozen,6550,0.013468195175836195,0.00230748175222954,0.02491937808769579,0.02197802197802198,0.13186813186813187,False
+H3 fusion vs better single modality,dd_40,fusion_late_top3,longformer_panel_frozen,6550,0.042332281262426386,0.026163112862094138,0.058346270093154365,0.001998001998001998,0.023976023976023976,True

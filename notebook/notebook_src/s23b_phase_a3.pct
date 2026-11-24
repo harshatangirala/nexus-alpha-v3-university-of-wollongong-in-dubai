@@ -1,0 +1,439 @@
+# %% [markdown]
+## 23B. Addendum 3 (post-hoc): combinations of networks, interpretable text features, design register and the v3.1 protocol
+
+**Status.** Written after the confirmatory test (§23) and the first addendum (§23A). Every table here is labelled *post-hoc*. No confirmatory number changes; the reproducibility check in §23A.5 still compares the confirmatory tables with the archived first run. All selections below use the validation block only; models are fitted on the training block and tuned on 2021, exactly as before.
+
+| Step | Question | What is computed |
+|---|---|---|
+| C1 | Do combinations of 2 or 3 vision networks beat the best single network? | all 63 equal-weight combinations of the 7 fine-tuned CV models; best per task on validation; **H9a** on test |
+| C2 | Do combinations of language models beat the best single language model? | all 63 combinations of the 7 NLP models on filing events; **H9b** on test (also the 7 best daily-panel NLP models, used in C3) |
+| C3 | Does a combination of language models add edge to a combination of vision networks? | grid of (1, 2, 3 CV networks) x (0, 1, 2, 3 NLP models), late-fusion weight on validation; **H9c** (vs the best CV combination) and **H9d** (vs the strongest numbers-only baseline) |
+| T2a | Does the *change* in a filing's wording (Lazy Prices, Cohen et al. 2020) go with the reaction or forecast risk? | cosine distance between a 10-K / 10-Q and the company's previous filing of the same form; **H10a** |
+| T2b | Does dictionary tone (Loughran and McDonald 2011) add anything? | Loughran-McDonald positive / negative word shares and polarity; **H10b** |
+| T2c | Do the words explain the *size* of the reaction beyond form, 8-K item, sector and timing? | ridge regression of log(1 + abs z) on metadata vs metadata + words; **H11** |
+| T1 | Research design, hypothesis register, filing timing | one design figure, one register of every hypothesis (confirmatory or post-hoc), the timing table on the test block |
+| T3 | What would a confirmatory v3.1 look like? | a pre-registered protocol written to `results/v31_protocol.md` before any v3.1 run |
+
+# %%
+from scipy.stats import spearmanr
+import scipy.sparse as sp
+A3_TABLES = []
+def _save_a3(df, name, cols=None):
+    """Always writes the file (an empty table with headers if the step produced nothing), so a failed optional step shows as 'Not available', not as a missing artifact."""
+    if df is None or not len(df):
+        df = pd.DataFrame(columns=cols or ["note"])
+    _save_post_hoc(df, name, index=False); A3_TABLES.append(name)
+def _vsel(ctx, pred_t, t, mask):
+    r = ctx.rows(t, mask, pred_t)
+    return primary_value(t, ctx.Y[t][r], np.asarray(pred_t)[r]) if len(r) >= 30 else -np.inf
+def _recal(ctx, p, t):
+    """The inner-block (2021) re-calibration that ensemble_model / finalize give every ensemble and fusion, for one task:
+    temperature (direction), linear (volatility), Platt (drawdown). Without it a volatility average is scored with the wrong level."""
+    p = np.asarray(p, dtype=float); kd = t.split("_")[0]
+    raw = raw_from_probs({t: p})[t]
+    r = ctx.rows(t, ctx.mask["inner"], raw)
+    if len(r) < 50:
+        return p
+    y = ctx.Y[t][r]
+    if kd == "dir":
+        z = raw[r]; yi = y.astype(int)
+        T = float(minimize_scalar(lambda T_: -np.mean(np.log(np.clip(softmax_np(z / T_)[np.arange(len(yi)), yi], 1e-9, 1))), bounds=(0.05, 20), method="bounded").x)
+        return softmax_np(raw / T)
+    if kd == "vol":
+        x = raw[r]; b = float(np.cov(x, y)[0, 1] / max(np.var(x, ddof=1), 1e-12)); a = float(y.mean() - b * x.mean())
+        return a + b * raw
+    if not (0 < y.sum() < len(r)):
+        return p
+    lr_ = LogisticRegression(C=100.0).fit(raw[r].reshape(-1, 1), y.astype(int))
+    return 1.0 / (1.0 + np.exp(-(float(lr_.intercept_[0]) + float(lr_.coef_[0, 0]) * raw)))
+def _avg_task(ctx, members, t):
+    """Equal-weight average of the members' calibrated predictions, re-calibrated on 2021: exactly what ensemble_model produces."""
+    return _recal(ctx, np.mean([np.asarray(load_pred(ctx.name, m)[t], dtype=float) for m in members], axis=0), t)
+def combo_search(ctx, pool, mask, kmax=3):
+    """Every equal-weight combination of 1..kmax models from pool; validation primary per task."""
+    rows = []
+    for k in range(1, min(kmax, len(pool)) + 1):
+        for combo in itertools.combinations(pool, k):
+            for t in TASKS:
+                rows.append({"members": combo, "combo": " + ".join(combo), "size": k, "task": t, "val": _vsel(ctx, _avg_task(ctx, combo, t), t, mask)})
+    return pd.DataFrame(rows)
+def best_by_size(df):
+    out = {}
+    for (k, t), g in df.groupby(["size", "task"]):
+        g = g[np.isfinite(g["val"].astype(float))]
+        if len(g):
+            out[(int(k), t)] = tuple(g.loc[g["val"].astype(float).idxmax(), "members"])
+    return out
+def best_overall(df):
+    out = {}
+    for t, g in df.groupby("task"):
+        g = g[np.isfinite(g["val"].astype(float))]
+        if len(g):
+            out[t] = tuple(g.loc[g["val"].astype(float).idxmax(), "members"])
+    return out
+def size_table(ctx, df, by_size, test_mask, modality):
+    rows = []
+    for (k, t), mem in by_size.items():
+        rows.append({"modality": modality, "size": k, "task": t, "target": t.split("_")[0], "best_combo": " + ".join(mem),
+                     "val_primary": float(df[(df["size"] == k) & (df["task"] == t)]["val"].max()), "test_primary": _vsel(ctx, _avg_task(ctx, mem, t), t, test_mask)})
+    return pd.DataFrame(rows)
+
+# %% [markdown]
+### 23B.1 Combinations of networks within each modality and across modalities (C1-C3)
+
+# %%
+H9A = H9B = H9C = H9D = None
+COMBO_SEL_ROWS, SIZE_TABS, GRID = [], [], []
+try:
+    t0_ = time.time()
+    # C1: vision networks
+    CVC = combo_search(PANEL, list(CV_MAIN), VM)
+    CV_BY_K, CV_SEL = best_by_size(CVC), best_overall(CVC)
+    ensemble_model(PANEL, "cv_combo_best", {t: list(CV_SEL.get(t, ())) for t in TASKS}, "cv_ensemble", label="Best CV combination per task (1-3 networks, chosen on validation)")
+    SIZE_TABS.append(size_table(PANEL, CVC, CV_BY_K, TEM, "CV"))
+    COMBO_SEL_ROWS += [{"modality": "CV", "task": t, "members": " + ".join(m), "size": len(m)} for t, m in CV_SEL.items()]
+    H9A = _verdict2(delta_rows(PANEL, {t: ("cv_combo_best", BEST_CV_TASK[t]) for t in TASKS if t in BEST_CV_TASK}, TEM,
+                               "H9a best CV combination vs best single CV model"))
+    # C2: language models on filing events
+    NLC = combo_search(EVENT, list(NLP_MAIN), EVENT.mask["val"])
+    NL_BY_K, NL_SEL = best_by_size(NLC), best_overall(NLC)
+    ensemble_model(EVENT, "nlp_combo_best", {t: list(NL_SEL.get(t, ())) for t in TASKS}, "nlp_ensemble", label="Best NLP combination per task (1-3 models, chosen on validation)")
+    SIZE_TABS.append(size_table(EVENT, NLC, NL_BY_K, TEE, "NLP (filing events)"))
+    COMBO_SEL_ROWS += [{"modality": "NLP (filing events)", "task": t, "members": " + ".join(m), "size": len(m)} for t, m in NL_SEL.items()]
+    H9B = _verdict2(delta_rows(EVENT, {t: ("nlp_combo_best", BEST_NLP_TASK[t]) for t in TASKS if t in BEST_NLP_TASK}, TEE,
+                               "H9b best NLP combination vs best single NLP model (filing events)"))
+    # C2b: language models carried to the daily panel (the 7 best by validation mean rank), needed for cross-modal fusion
+    _pp = [m for m in NLP_PANEL_ALL if m in PIV_NLPP.index]
+    NLPP_POOL = list(PIV_NLPP.loc[_pp].rank(ascending=False).mean(1).sort_values().index[:7])
+    NPC = combo_search(PANEL, NLPP_POOL, VM)
+    NP_BY_K, NP_SEL = best_by_size(NPC), best_overall(NPC)
+    ensemble_model(PANEL, "nlpp_combo_best", {t: list(NP_SEL.get(t, ())) for t in TASKS}, "nlp_panel_ensemble", label="Best NLP panel combination per task (1-3 models)")
+    SIZE_TABS.append(size_table(PANEL, NPC, NP_BY_K, TEM, "NLP (daily panel)"))
+    # C3: (1, 2, 3 CV networks) x (0, 1, 2, 3 NLP models), late-fusion weight on validation
+    FUSED_SEL, fused = {}, {}
+    for t in TASKS:
+        best_t = None
+        for kc in (1, 2, 3):
+            mc = CV_BY_K.get((kc, t))
+            if mc is None:
+                continue
+            pa = _avg_task(PANEL, mc, t)
+            for kn in (0, 1, 2, 3):
+                mn, w = (), 1.0
+                if kn == 0:
+                    p_ = pa
+                else:
+                    mn = NP_BY_K.get((kn, t))
+                    if mn is None:
+                        continue
+                    pb = _avg_task(PANEL, mn, t)
+                    # as choose_weights (section 20): the weight is chosen on the blend, then the blend is re-calibrated like fusion_late_top3
+                    w = max(CFG["fusion_w_grid"], key=lambda w_: _vsel(PANEL, w_ * pa + (1 - w_) * pb, t, VM))
+                    p_ = _recal(PANEL, w * pa + (1 - w) * pb, t)
+                v_, te_ = _vsel(PANEL, p_, t, VM), _vsel(PANEL, p_, t, TEM)
+                GRID.append({"task": t, "target": t.split("_")[0], "n_cv": kc, "n_nlp": kn, "cv": " + ".join(mc), "nlp": " + ".join(mn), "w_cv": w,
+                             "val_primary": v_, "test_primary": te_})
+                if best_t is None or v_ > best_t[0]:
+                    best_t = (v_, kc, kn, mc, mn, w, p_)
+        if best_t is not None:
+            FUSED_SEL[t] = best_t; fused[t] = best_t[6]
+        else:
+            fused[t] = np.full((PANEL.n, 3) if t.startswith("dir") else PANEL.n, np.nan)
+    finalize(PANEL, "fusion_combo_best", raw_from_probs(fused), "fusion", label="Best CV combination x best NLP combination (sizes and weight chosen on validation)")
+    COMBO_SEL_ROWS += [{"modality": "CV + NLP", "task": t, "members": f"{' + '.join(b[3])} | {' + '.join(b[4]) or '(no NLP)'}", "size": len(b[3]) + len(b[4]), "w_cv": b[5]}
+                       for t, b in FUSED_SEL.items()]
+    _bn = globals().get("BEST_NUM_BASE", {})
+    H9C = _verdict2(delta_rows(PANEL, {t: ("fusion_combo_best", "cv_combo_best") for t in TASKS}, TEM, "H9c CV combination + NLP combination vs CV combination"))
+    H9D = _verdict2(delta_rows(PANEL, {t: ("fusion_combo_best", _bn[t]) for t in TASKS if t in _bn}, TEM, "H9d CV + NLP combination vs strongest numbers-only baseline"))
+    print(f"Combination study: {len(CVC) // len(TASKS)} CV, {len(NLC) // len(TASKS)} NLP-event, {len(NPC) // len(TASKS)} NLP-panel candidates; "
+          f"{len(GRID)} cross-modal cells; {(time.time() - t0_) / 60:.1f} min")
+except Exception as e_:
+    failed("phase_a3_combinations", e_)
+_save_a3(pd.DataFrame(COMBO_SEL_ROWS), "combo_selection.csv", ["modality", "task", "members", "size"])
+_save_a3(pd.concat(SIZE_TABS, ignore_index=True) if SIZE_TABS else None, "combo_by_size.csv", ["modality", "size", "task", "target", "best_combo", "val_primary", "test_primary"])
+GRID_DF = pd.DataFrame(GRID)
+_save_a3(GRID_DF, "combo_grid.csv", ["task", "target", "n_cv", "n_nlp", "cv", "nlp", "w_cv", "val_primary", "test_primary"])
+GRID_SUM = (GRID_DF.groupby(["target", "n_cv", "n_nlp"])[["val_primary", "test_primary"]].mean().reset_index().round(4) if len(GRID_DF) else None)
+_save_a3(GRID_SUM, "combo_grid_summary.csv", ["target", "n_cv", "n_nlp", "val_primary", "test_primary"])
+for nm_, df_ in [("H9a", H9A), ("H9b", H9B), ("H9c", H9C), ("H9d", H9D)]:
+    _save_a3(df_, f"test_{nm_}.csv", ["task", "A", "B", "delta", "lo", "hi", "p_holm", "verdict"])
+    if df_ is not None and len(df_):
+        print(nm_); display(df_[["task", "A", "B", "delta", "lo", "hi", "p_holm", "verdict"]].round(4))
+try:
+    if GRID_SUM is not None and len(GRID_SUM):
+        fig, axes = plt.subplots(1, 3, figsize=(15, 3.6))
+        for a_, kd_ in zip(axes, ("dir", "vol", "dd")):
+            g_ = GRID_SUM[GRID_SUM["target"] == kd_].pivot(index="n_cv", columns="n_nlp", values="test_primary")
+            im_ = a_.imshow(g_.values, cmap="RdYlGn", aspect="auto")
+            for i_ in range(g_.shape[0]):
+                for j_ in range(g_.shape[1]):
+                    a_.text(j_, i_, f"{g_.values[i_, j_]:.3f}", ha="center", va="center", fontsize=8)
+            a_.set_xticks(range(g_.shape[1])); a_.set_xticklabels([f"{c} NLP" for c in g_.columns], fontsize=8)
+            a_.set_yticks(range(g_.shape[0])); a_.set_yticklabels([f"{r} CV" for r in g_.index], fontsize=8)
+            a_.set_title(f"{TASK_LABEL[kd_]}: mean test {PRIMARY[kd_]}", fontsize=9)
+        plt.tight_layout(); savefig(fig, "combo_grid_test.png"); plt.show()
+except Exception as e_:
+    failed("phase_a3_combo_figure", e_)
+
+# %% [markdown]
+### 23B.2 Interpretable text features: text change (Lazy Prices) and dictionary tone (T2a, T2b)
+
+**Text change.** For every 10-K and 10-Q, the cosine similarity between its TF-IDF vector and that of the same company's previous filing of the same form (the vocabulary is fitted on training filings only); change = 1 - similarity. Cohen, Malloy and Nguyen (2020) find that firms which change their reports' wording subsequently under-perform. **Dictionary tone.** The Loughran-McDonald (2011) finance dictionary, via the `pysentiment2` package: shares of positive and negative words and polarity. If the package cannot be installed the step is reported as Not Run. **Tests.** Spearman correlations with the reaction (development and test, month-block bootstrap intervals), and the no-text LightGBM on filing events (`tech_event`, §23A) with these features added, compared on the locked test (H10a, H10b).
+
+# %%
+H10A = H10B = None
+CHANGE = np.full(len(EV), np.nan); LM_FEATS = None; CORR_ROWS = []
+try:
+    _forms = EV["form"].astype(str).to_numpy(dtype=object); _tk = EV["ticker"].astype(str).to_numpy(dtype=object)
+    _last = {}
+    for i_ in np.argsort(EV["entry_date"].values, kind="stable"):
+        if _forms[i_] in ("10-K", "10-Q"):
+            j_ = _last.get((_tk[i_], _forms[i_]))
+            if j_ is not None:
+                CHANGE[i_] = 1.0 - float(X_TFIDF[i_].multiply(X_TFIDF[j_]).sum())
+            _last[(_tk[i_], _forms[i_])] = i_
+    print(f"Text change computed for {int(np.isfinite(CHANGE).sum()):,} periodic filings.")
+except Exception as e_:
+    failed("phase_a3_text_change", e_)
+try:
+    _lm_cache = SUB["results"] / "lm_dictionary_features.npy"
+    if _lm_cache.exists() and np.load(_lm_cache).shape[0] == len(EV_TEXT):
+        LM_FEATS = np.load(_lm_cache)
+    else:
+        try:
+            import pysentiment2 as ps2
+        except ImportError:
+            subprocess.run([sys.executable, "-m", "pip", "install", "-q", "pysentiment2"], check=False)
+            import pysentiment2 as ps2
+        _lm = ps2.LM(); rows_ = []
+        for tx_ in EV_TEXT:
+            tok_ = _lm.tokenize(str(tx_)[:8000]); sc_ = _lm.get_score(tok_); n_ = max(len(tok_), 1)
+            rows_.append((float(sc_["Polarity"]), float(sc_["Subjectivity"]), float(sc_["Negative"]) / n_, float(sc_["Positive"]) / n_))
+        LM_FEATS = np.asarray(rows_, dtype=np.float32); np.save(_lm_cache, LM_FEATS)
+    print("Loughran-McDonald features:", LM_FEATS.shape)
+except Exception as e_:
+    LM_FEATS = None; failed("phase_a3_lm_dictionary", e_)
+try:
+    _dev = EV["block"].isin(["train", "inner", "val"]).to_numpy(dtype=bool); _te = np.asarray(TE_EV, dtype=bool)
+    _absz, _ar2 = EV["abs_z"].to_numpy(dtype=float), EV["ar2"].to_numpy(dtype=float); _mo = EV["month"].astype(str).to_numpy(dtype=object)
+    feats_ = {"text change (10-K / 10-Q)": CHANGE}
+    if LM_FEATS is not None:
+        feats_.update({"LM polarity": LM_FEATS[:, 0].astype(float), "LM negative-word share": LM_FEATS[:, 2].astype(float)})
+    if "finbert_tone" in EV.columns:
+        feats_["FinBERT tone (reference)"] = EV["finbert_tone"].to_numpy(dtype=float)
+    for fn_, fx_ in feats_.items():
+        for tn_, ty_ in (("size of reaction |z|", _absz), ("signed abnormal return", _ar2)):
+            for pn_, pm_ in (("development", _dev), ("test", _te)):
+                ok_ = pm_ & np.isfinite(fx_) & np.isfinite(ty_)
+                if ok_.sum() < 30:
+                    continue
+                xa_, ya_ = fx_[ok_], ty_[ok_]
+                rho_ = float(spearmanr(xa_, ya_).correlation)
+                bs_ = bootstrap(lambda ix: float(spearmanr(xa_[ix], ya_[ix]).correlation), month_groups(_mo[ok_]), B=500)
+                CORR_ROWS.append({"feature": fn_, "target": tn_, "period": pn_, "rho": rho_, "lo": float(np.nanpercentile(bs_, 2.5)),
+                                  "hi": float(np.nanpercentile(bs_, 97.5)), "n": int(ok_.sum())})
+    # quintiles of text change (cut-offs from development filings)
+    QROWS = []
+    okd_ = _dev & np.isfinite(CHANGE) & np.isfinite(_absz)
+    if okd_.sum() >= 50:
+        cuts_ = np.nanpercentile(CHANGE[okd_], [20, 40, 60, 80])
+        for pn_, pm_ in (("development", _dev), ("test", _te)):
+            ok_ = pm_ & np.isfinite(CHANGE) & np.isfinite(_absz); q_ = np.digitize(CHANGE[ok_], cuts_)
+            for k_ in range(5):
+                sel_ = q_ == k_
+                QROWS.append({"period": pn_, "change_quintile": k_ + 1, "n": int(sel_.sum()), "mean_abs_z": float(np.mean(_absz[ok_][sel_])) if sel_.any() else np.nan})
+    _save_a3(pd.DataFrame(QROWS), "text_change_quintiles.csv", ["period", "change_quintile", "n", "mean_abs_z"])
+except Exception as e_:
+    failed("phase_a3_text_correlations", e_)
+_save_a3(pd.DataFrame(CORR_ROWS), "text_features_corr.csv", ["feature", "target", "period", "rho", "lo", "hi", "n"])
+try:
+    _EVT, _FOH = globals().get("EV_TECH"), globals().get("FORM_OH")
+    if _EVT is not None and _FOH is not None and REG.get("tech_event", {}).get("status") == "RUN":
+        has_c_ = np.isfinite(CHANGE).astype(np.float32)
+        ch_ = np.nan_to_num(CHANGE, nan=float(np.nanmedian(CHANGE[EVENT.mask["train"] & np.isfinite(CHANGE)]))).astype(np.float32)
+        X_LZ = np.hstack([_EVT, _FOH, ch_[:, None], has_c_[:, None]])
+        finalize(EVENT, "tech_event_lazy", fit_heads(EVENT, X_LZ, EVENT.mask["train"], EVENT.mask["inner"], "gbm"), "baseline_event",
+                 label="Technical LightGBM + form + text change (Lazy Prices)")
+        H10A = _verdict2(delta_rows(EVENT, {t: ("tech_event_lazy", "tech_event") for t in TASKS}, TEE, "H10a no-text model + text change vs no-text model"))
+        if LM_FEATS is not None:
+            finalize(EVENT, "tech_event_textfeat", fit_heads(EVENT, np.hstack([X_LZ, LM_FEATS]), EVENT.mask["train"], EVENT.mask["inner"], "gbm"), "baseline_event",
+                     label="Technical LightGBM + form + text change + Loughran-McDonald tone")
+            H10B = _verdict2(delta_rows(EVENT, {t: ("tech_event_textfeat", "tech_event") for t in TASKS}, TEE,
+                                        "H10b no-text model + text change + dictionary tone vs no-text model"))
+except Exception as e_:
+    failed("phase_a3_text_feature_models", e_)
+for nm_, df_ in [("H10a", H10A), ("H10b", H10B)]:
+    _save_a3(df_, f"test_{nm_}.csv", ["task", "A", "B", "delta", "lo", "hi", "p_holm", "verdict"])
+    if df_ is not None and len(df_):
+        print(nm_); display(df_[["task", "A", "B", "delta", "lo", "hi", "p_holm", "verdict"]].round(4))
+if CORR_ROWS:
+    display(pd.DataFrame(CORR_ROWS).round(3))
+
+# %% [markdown]
+### 23B.3 Do the words explain the size of the reaction beyond the metadata? (T2c, H11)
+
+Target: log(1 + |z|), the size of the two-day abnormal move. **Metadata model:** ridge regression on form, sector, the 14 most frequent 8-K items and the filing time (pre-market, intraday, after the close). **Text models:** the same plus the TF-IDF n-grams (vocabulary fitted on training filings), or plus the interpretable features of §23B.2. Because TF-IDF n-grams contain company names, both comparisons are repeated with a company one-hot added to the metadata (words beyond the company's identity, as H8f does for forecasting). Fitted on the training block, ridge penalty chosen on 2021, scored once on the locked test; the difference in R-squared has a paired month-block bootstrap interval (Holm over the comparisons).
+
+# %%
+H11 = None
+try:
+    def _oh(vals, cats):
+        return np.stack([(vals == c) for c in cats], 1).astype(np.float32)
+    _bk = EV["session_bucket"].astype(str).to_numpy(dtype=object)
+    _sec_ = EV["sector"].astype(str).to_numpy(dtype=object)
+    _items = EV["items"].fillna("").astype(str).to_numpy(dtype=object)
+    _top_items = [str(i) for i in ITEM_COUNTS.index[:15] if str(i) != "9.01"][:14]
+    _it_mh = np.array([[it in [x.strip() for x in s.split(",")] for it in _top_items] for s in _items], dtype=np.float32)
+    _forms_m = EV["form"].astype(str).to_numpy(dtype=object)
+    META = np.hstack([_oh(_forms_m, list(CFG["sec"]["forms"])), _oh(_sec_, list(SECTORS)), _oh(_bk, sorted(set(_bk))), _it_mh])
+    y_rs = np.log1p(EV["abs_z"].to_numpy(dtype=float))
+    ok_rs = np.isfinite(y_rs)
+    fr_, ir_, tr_ = (np.flatnonzero(np.asarray(m_, dtype=bool) & ok_rs) for m_ in (EVENT.mask["train"], EVENT.mask["inner"], TEE))
+    def _ridge(X):
+        best_, bl_ = None, np.inf
+        for a_ in (0.3, 1.0, 3.0, 10.0, 30.0, 100.0, 300.0):
+            m_ = Ridge(alpha=a_).fit(X[fr_], y_rs[fr_]); l_ = float(np.mean((m_.predict(X[ir_]) - y_rs[ir_]) ** 2))
+            if l_ < bl_:
+                best_, bl_ = m_, l_
+        return best_.predict(X[tr_])
+    def _std(Z):
+        mu_, sd_ = np.nanmean(Z[fr_], 0), np.nanstd(Z[fr_], 0) + 1e-9
+        return np.nan_to_num((Z - mu_) / sd_)
+    # company one-hot: TF-IDF n-grams contain company names, so the words must also be tested beyond the company's identity (as H8f does)
+    _tk_rs = EV["ticker"].astype(str).to_numpy(dtype=object)
+    META_CO = np.hstack([META, _oh(_tk_rs, sorted(set(_tk_rs)))])
+    _interp = [np.nan_to_num(CHANGE)[:, None], np.isfinite(CHANGE).astype(np.float32)[:, None]] + ([LM_FEATS] if LM_FEATS is not None else [])
+    _INT = _std(np.hstack(_interp).astype(np.float32))
+    PRED_RS = {"metadata": _ridge(META), "metadata + words (TF-IDF)": _ridge(sp.hstack([sp.csr_matrix(META), X_TFIDF]).tocsr()),
+               "metadata + interpretable text features": _ridge(np.hstack([META, _INT])),
+               "metadata + company": _ridge(META_CO),
+               "metadata + company + words (TF-IDF)": _ridge(sp.hstack([sp.csr_matrix(META_CO), X_TFIDF]).tocsr()),
+               "metadata + company + interpretable text features": _ridge(np.hstack([META_CO, _INT]))}
+    H11_PAIRS = [("metadata + words (TF-IDF)", "metadata"), ("metadata + interpretable text features", "metadata"),
+                 ("metadata + company + words (TF-IDF)", "metadata + company"), ("metadata + company + interpretable text features", "metadata + company")]
+    yt_ = y_rs[tr_]; mo_ = EV["month"].astype(str).to_numpy(dtype=object)[tr_]; grp_ = month_groups(mo_)
+    def _r2(y, p):
+        return float(1 - np.sum((y - p) ** 2) / max(np.sum((y - y.mean()) ** 2), 1e-12))
+    rows_ = []
+    for nm_, nb_ in H11_PAIRS:
+        pA_, pB_ = PRED_RS[nm_], PRED_RS[nb_]
+        fn_ = lambda ix, pA_=pA_, pB_=pB_: _r2(yt_[ix], pA_[ix]) - _r2(yt_[ix], pB_[ix])
+        bs_ = bootstrap(fn_, grp_); est_ = fn_(np.arange(len(yt_)))
+        p2_ = 2 * min((1 + np.sum(bs_ <= 0)) / (1 + len(bs_)), (1 + np.sum(bs_ >= 0)) / (1 + len(bs_)))
+        rows_.append({"task": "log(1+|z|)", "A": nm_, "B": nb_, "r2_A": _r2(yt_, pA_), "r2_B": _r2(yt_, pB_), "delta": est_,
+                      "lo": float(np.nanpercentile(bs_, 2.5)), "hi": float(np.nanpercentile(bs_, 97.5)), "p": float(min(1.0, p2_)),
+                      "spearman_A": float(spearmanr(pA_, yt_).correlation), "n": len(yt_)})
+    H11 = pd.DataFrame(rows_); H11["p_holm"] = holm(H11["p"].values); H11 = _verdict2(H11)
+    display(H11.round(4))
+except Exception as e_:
+    failed("phase_a3_reaction_size", e_)
+_save_a3(H11, "test_H11.csv", ["A", "B", "r2_A", "r2_B", "delta", "lo", "hi", "p_holm", "verdict", "n"])
+
+# %% [markdown]
+### 23B.4 Research design figure, filing timing on the test block, and the hypothesis register (T1)
+
+# %%
+try:
+    ES_BUCKET_TEST = EV[TE_EV].groupby(["form", "session_bucket"])["abs_z"].agg(["mean", "size"]).round(3).reset_index()
+    _save_a3(ES_BUCKET_TEST, "event_study_timing_test.csv", ["form", "session_bucket", "mean", "size"])
+except Exception as e_:
+    failed("phase_a3_timing", e_)
+try:
+    fig, ax = plt.subplots(figsize=(13, 3.8)); ax.set_xlim(0, 100); ax.set_ylim(0, 10); ax.axis("off")
+    _blocks = [("Training\n2016-10 to 2020-12\n(fit models)", 2, 38, "#cfe2f3"), ("Inner 2021\n(early stopping,\ncalibration)", 41, 13, "#d9ead3"),
+               ("Validation 2022-2023\n(every selection)", 57, 18, "#fff2cc"), ("Locked test\n2024-01 to 2026-08\n(opened once)", 78, 20, "#f4cccc")]
+    for lab_, x_, w_, c_ in _blocks:
+        ax.add_patch(plt.Rectangle((x_, 5.6), w_, 3.2, color=c_, ec="black", lw=0.6)); ax.text(x_ + w_ / 2, 7.2, lab_, ha="center", va="center", fontsize=8)
+    for x_ in (40, 55.5, 76.5):
+        ax.text(x_, 9.3, "40-session\npurge", ha="center", va="center", fontsize=6.5, color="#990000")
+    _flow = ["Verified bars +\nEDGAR filings\n(point in time)", "7 CV + 6 NLP\nmodels, baselines", "Selection on\nvalidation", "Hashed freeze\n(selections,\npredictions)",
+             "Vault opened:\nH1-H7 tested", "Post-hoc addenda\n(labelled):\nH1c-H11"]
+    for k_, lab_ in enumerate(_flow):
+        x_ = 2 + k_ * 16.3
+        ax.add_patch(plt.Rectangle((x_, 0.6), 14, 3.6, color="#eeeeee", ec="black", lw=0.6)); ax.text(x_ + 7, 2.4, lab_, ha="center", va="center", fontsize=7.5)
+        if k_ < len(_flow) - 1:
+            ax.annotate("", xy=(x_ + 16.1, 2.4), xytext=(x_ + 14.2, 2.4), arrowprops=dict(arrowstyle="->", lw=0.8))
+    ax.set_title("Research design: time blocks (top) and the order of work (bottom)", fontsize=10)
+    plt.tight_layout(); savefig(fig, "research_design.png"); plt.show()
+except Exception as e_:
+    failed("phase_a3_design_figure", e_)
+
+def _conf(df):
+    if df is None or not len(df) or "supported" not in df.columns:
+        return 0, "not run"
+    return len(df), f"supported in {int(df['supported'].sum())} of {len(df)}"
+def _post(df):
+    if df is None or not len(df) or "verdict" not in df.columns:
+        return 0, "not run"
+    vc_ = df["verdict"].value_counts()
+    return len(df), f"better {int(vc_.get('better', 0))}, no clear difference {int(vc_.get('no clear difference', 0))}, worse {int(vc_.get('worse', 0))}"
+_G = globals().get
+REGISTER_SPEC = [
+    ("H1", "CV", "confirmatory", "The validation-chosen CV model has skill over the uninformed benchmark (shuffled null, R-squared 0, AUC 0.5)", _conf, "H1"),
+    ("H2", "NLP", "confirmatory", "The validation-chosen NLP model has skill on filing events", _conf, "H2"),
+    ("H2b", "NLP", "confirmatory", "NLP models carried to the daily panel have skill", _conf, "H2p"),
+    ("H3", "CV+NLP", "confirmatory", "Fusion beats the better single modality", _conf, "H3"),
+    ("H4", "CV+NLP", "confirmatory", "Top-3 CV + top-3 NLP beats top-3 CV (Q10)", _conf, "H4"),
+    ("H5", "CV", "confirmatory", "Fine-tuning beats frozen features", _conf, "H5"),
+    ("H6", "CV", "confirmatory", "CV model rankings depend on the sector", _conf, "H6"),
+    ("H7", "NLP", "confirmatory", "Filing days move prices more than non-filing days; reactions differ by form", _conf, "H7"),
+    ("H1c", "CV", "post-hoc", "Best CV model vs strongest numbers-only baseline", _post, "H1C"),
+    ("H1d", "CV", "post-hoc", "Direction skill (own shuffled nulls): best CV vs numbers-only baseline", _post, "H1D"),
+    ("H2c", "NLP", "post-hoc", "Best NLP model vs strongest no-text baseline on the same filings", _post, "H2C_EV"),
+    ("H2d", "NLP", "post-hoc", "Direction skill (own shuffled nulls): best NLP vs no-text baseline", _post, "H2D"),
+    ("H3c", "CV+NLP", "post-hoc", "Best fusion vs strongest numbers-only baseline", _post, "H3C"),
+    ("H8", "CV+NLP", "post-hoc", "Technical + CV + NLP features vs technical features (same LightGBM)", _post, "H8"),
+    ("H8b", "CV", "post-hoc", "Technical + CV features vs technical features", _post, "H8B"),
+    ("H8c", "NLP", "post-hoc", "Technical + NLP features vs technical features", _post, "H8C"),
+    ("H8d", "NLP", "post-hoc", "Technical + filing-calendar columns vs technical features", _post, "H8D"),
+    ("H8e", "NLP", "post-hoc", "Technical + text vs technical + filing calendar (the words)", _post, "H8E"),
+    ("H8f", "NLP", "post-hoc", "Technical + text vs technical + calendar + company (words beyond identity)", _post, "H8F"),
+    ("H9a", "CV", "post-hoc", "Best combination of 1-3 CV networks vs best single CV network", _post, "H9A"),
+    ("H9b", "NLP", "post-hoc", "Best combination of 1-3 NLP models vs best single NLP model", _post, "H9B"),
+    ("H9c", "CV+NLP", "post-hoc", "CV combination + NLP combination vs CV combination", _post, "H9C"),
+    ("H9d", "CV+NLP", "post-hoc", "CV combination + NLP combination vs strongest numbers-only baseline", _post, "H9D"),
+    ("H10a", "NLP", "post-hoc", "No-text model + text change (Lazy Prices) vs no-text model", _post, "H10A"),
+    ("H10b", "NLP", "post-hoc", "No-text model + text change + Loughran-McDonald tone vs no-text model", _post, "H10B"),
+    ("H11", "NLP", "post-hoc", "Words explain the size of the reaction beyond form, item, sector and timing (and, in 2 of the tests, the company)", _post, "H11")]
+try:
+    HYP_REGISTER = pd.DataFrame([{"id": i_, "module": m_, "type": ty_, "statement": s_, "tests": f_(_G(v_))[0], "outcome": f_(_G(v_))[1]}
+                                 for i_, m_, ty_, s_, f_, v_ in REGISTER_SPEC])
+except Exception as e_:
+    HYP_REGISTER = None; failed("phase_a3_register", e_)
+_save_a3(HYP_REGISTER, "hypothesis_register.csv", ["id", "module", "type", "statement", "tests", "outcome"])
+if HYP_REGISTER is not None:
+    display(HYP_REGISTER)
+
+# %% [markdown]
+### 23B.5 Pre-registered protocol for a confirmatory v3.1 (T3)
+
+The protocol is written once (the first execution that reaches this cell) and never overwritten; its SHA-256 is printed so that any later v3.1 run can show it followed the registered plan. Nothing in v3.1 may be tuned on the 2024-2026 block, which is now spent.
+
+# %%
+V31_PROTOCOL = [
+    ("Status", "Registered after the v3.0 test block was opened. v3.0 results are final; v3.1 is a new study with a new, untouched test period."),
+    ("New test period", "Forward data only: decisions from 2026-12-01 until at least 2027-08-31 (about 9 months; longer if possible). No v3.1 choice may use any label from this period; labels are collected by a scheduled job and opened once, after a hashed freeze, as in v3.0."),
+    ("Development data", "Training 2016-10 to 2022-12, early stopping and calibration 2023, validation 2024-01 to 2026-08 (the v3.0 test block becomes validation: it is no longer a test)."),
+    ("Universe", "The 50 v3.0 stocks plus an extension to S&P 500 members with 10 years of verified hourly bars, including companies that were delisted during the period (survivorship control)."),
+    ("Computer vision changes", "(1) A chart encoding that keeps the volatility level: a fixed price scale per stock (log price relative to the 60-session mean, in units of trailing volatility) next to the min-max chart; (2) the vertical-rescale augmentation removed for the volatility head; (3) five seeds per model; mean and spread reported."),
+    ("NLP changes", "(1) Five seeds per encoder; (2) layer-wise learning-rate decay, longer warm-up and bias-corrected AdamW for the large encoders (Mosbach et al. 2021); (3) QLoRA fine-tuning of FinGPT; (4) minute-stamped news alongside filings; (5) the text-change and dictionary features of §23B.2 as pre-specified inputs."),
+    ("Hypotheses (fixed now)", "P1: the fixed-scale chart model beats the min-max chart model on volatility R-squared. P2: CV beats the strongest numbers-only baseline on direction skill (own shuffled nulls) at 5 and 10 days. P3: technical + text features beat technical + filing-calendar + company columns on volatility. P4: the best combination of networks (chosen on validation) beats the best single network within each modality. P5: filing-day reactions exceed non-filing-day reactions, by form (replication of H7)."),
+    ("Primary metrics and tests", "Direction: macro-F1 minus the model's own within-month shuffled null; volatility: R-squared and QLIKE; drawdown: ROC-AUC and Brier skill. Paired month-block bootstrap, 5,000 draws, Holm within each hypothesis family, alpha 0.05. Every baseline of v3.0 (prior, HAR / momentum / trailing volatility, technical LightGBM, per-company base rates, filing calendar) is included."),
+    ("Decision rules", "A hypothesis is supported only if its Holm-corrected p is below 0.05 and the interval excludes zero on the new test period. Results are reported whether or not they are supported; no model is added after the freeze."),
+    ("Ethics and data", "SEC fair-access policy (declared user agent, at most 8 requests per second), licensed price data used for research only, no personal data, gated model licences respected (Llama 2 Community License), not financial advice."),
+]
+try:
+    _pp = SUB["results"] / "v31_protocol.md"
+    if not _pp.exists():
+        _pp.write_text("# NEXUS Alpha v3.1 - pre-registered protocol\n\nRegistered (UTC): " + now_utc() + "\n\n" +
+                       "\n\n".join(f"## {h_}\n\n{b_}" for h_, b_ in V31_PROTOCOL) + "\n")
+    V31_SHA = hashlib.sha256(_pp.read_bytes()).hexdigest()
+    V31_REGISTERED = re.search(r"Registered \(UTC\): (\S+)", _pp.read_text()).group(1) if re.search(r"Registered \(UTC\): (\S+)", _pp.read_text()) else "n/a"
+    (SUB["results"] / "v31_protocol.json").write_text(json.dumps({"registered_utc": V31_REGISTERED, "sha256": V31_SHA,
+                                                                  "sections": [{"heading": h_, "text": b_} for h_, b_ in V31_PROTOCOL]}, indent=1))
+    print(f"v3.1 protocol registered {V31_REGISTERED}; SHA-256 {V31_SHA[:16]}")
+except Exception as e_:
+    failed("phase_a3_protocol", e_)
+PHASE_A3 = {"utc": now_utc(), "tables": A3_TABLES, "models": ["cv_combo_best", "nlp_combo_best", "nlpp_combo_best", "fusion_combo_best", "tech_event_lazy", "tech_event_textfeat"]}
+(SUB["results"] / "phase_a3_results.json").write_text(json.dumps(PHASE_A3, indent=1, default=str))
+tick("23B phase a3")

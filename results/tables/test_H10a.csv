@@ -1,0 +1,13 @@
+family,task,A,B,n,delta,lo,hi,p,p_holm,supported,verdict
+H10a no-text model + text change vs no-text model,dir_5,tech_event_lazy,tech_event,2162,-0.002577489531086413,-0.008909637260918242,0.0010711679416575816,0.7852147852147852,1.0,False,no clear difference
+H10a no-text model + text change vs no-text model,dir_10,tech_event_lazy,tech_event,2156,0.009786977147491993,-0.0033659508064303296,0.02481874084297874,0.15984015984015984,1.0,False,no clear difference
+H10a no-text model + text change vs no-text model,dir_20,tech_event_lazy,tech_event,2140,0.00031937486101971113,0.0,0.0009604200221750027,0.7172827172827173,1.0,False,no clear difference
+H10a no-text model + text change vs no-text model,dir_40,tech_event_lazy,tech_event,2108,0.00663920050447947,-0.003813526609186817,0.02020656125030443,0.30569430569430567,1.0,False,no clear difference
+H10a no-text model + text change vs no-text model,vol_5,tech_event_lazy,tech_event,2162,-0.0028103817811399034,-0.008297401386597172,0.0029493698414536544,0.3876123876123876,1.0,False,no clear difference
+H10a no-text model + text change vs no-text model,vol_10,tech_event_lazy,tech_event,2156,-0.009935034075838622,-0.01638973965196347,-0.004045838241764167,0.001998001998001998,0.023976023976023976,False,worse
+H10a no-text model + text change vs no-text model,vol_20,tech_event_lazy,tech_event,2140,-0.011915517119030272,-0.01760330250777007,-0.006774007991185989,0.001998001998001998,0.023976023976023976,False,worse
+H10a no-text model + text change vs no-text model,vol_40,tech_event_lazy,tech_event,2108,0.0001660039234893107,-0.013058848598980604,0.015209287993568717,0.995004995004995,1.0,False,no clear difference
+H10a no-text model + text change vs no-text model,dd_5,tech_event_lazy,tech_event,2162,0.007722810354594434,-0.01068412212062943,0.02478319087645626,0.4035964035964036,1.0,False,no clear difference
+H10a no-text model + text change vs no-text model,dd_10,tech_event_lazy,tech_event,2156,-0.00908876946612791,-0.02706336936537139,0.005962294008332068,0.25574425574425574,1.0,False,no clear difference
+H10a no-text model + text change vs no-text model,dd_20,tech_event_lazy,tech_event,2140,0.0012585457979225056,-0.012292013785311357,0.014506401271922762,0.8371628371628371,1.0,False,no clear difference
+H10a no-text model + text change vs no-text model,dd_40,tech_event_lazy,tech_event,2108,0.01156089395005655,-0.03236819939107065,0.05847960370457835,0.5994005994005994,1.0,False,no clear difference

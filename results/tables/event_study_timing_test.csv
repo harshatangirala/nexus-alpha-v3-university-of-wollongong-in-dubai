@@ -1,0 +1,10 @@
+form,session_bucket,mean,size
+10-K,after close,1.474,103
+10-K,intraday,1.256,28
+10-K,pre-market,2.426,14
+10-Q,after close,1.568,289
+10-Q,intraday,1.562,70
+10-Q,pre-market,2.152,48
+8-K,after close,1.272,1065
+8-K,intraday,1.059,97
+8-K,pre-market,1.671,451

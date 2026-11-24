@@ -1,0 +1,13 @@
+family,task,A,B,n,delta,lo,hi,p,p_holm,supported,verdict
+H9c CV combination + NLP combination vs CV combination,dir_5,fusion_combo_best,cv_combo_best,6550,0.0,0.0,0.0,1.0,1.0,False,no clear difference
+H9c CV combination + NLP combination vs CV combination,dir_10,fusion_combo_best,cv_combo_best,6550,0.0,0.0,0.0,1.0,1.0,False,no clear difference
+H9c CV combination + NLP combination vs CV combination,dir_20,fusion_combo_best,cv_combo_best,6550,0.0,0.0,0.0,1.0,1.0,False,no clear difference
+H9c CV combination + NLP combination vs CV combination,dir_40,fusion_combo_best,cv_combo_best,6550,0.0,0.0,0.0,1.0,1.0,False,no clear difference
+H9c CV combination + NLP combination vs CV combination,vol_5,fusion_combo_best,cv_combo_best,6550,1.1102230246251565e-16,0.0,3.3306690738754696e-16,1.0,1.0,False,no clear difference
+H9c CV combination + NLP combination vs CV combination,vol_10,fusion_combo_best,cv_combo_best,6550,0.022963439431420096,0.009608362924742436,0.03635609235713723,0.005994005994005994,0.05994005994005994,False,no clear difference
+H9c CV combination + NLP combination vs CV combination,vol_20,fusion_combo_best,cv_combo_best,6550,-0.00040063813285440286,-0.02792189385778899,0.028099436767501616,0.955044955044955,1.0,False,no clear difference
+H9c CV combination + NLP combination vs CV combination,vol_40,fusion_combo_best,cv_combo_best,6550,0.004074925982578748,-0.045220356476682114,0.0571819877613131,0.8671328671328671,1.0,False,no clear difference
+H9c CV combination + NLP combination vs CV combination,dd_5,fusion_combo_best,cv_combo_best,6550,0.032217064544650786,-0.02097541527119053,0.07360238518737697,0.22377622377622378,1.0,False,no clear difference
+H9c CV combination + NLP combination vs CV combination,dd_10,fusion_combo_best,cv_combo_best,6550,0.03213302257853268,-0.02429303406359724,0.07482664993665117,0.25774225774225773,1.0,False,no clear difference
+H9c CV combination + NLP combination vs CV combination,dd_20,fusion_combo_best,cv_combo_best,6550,0.08978004140297918,0.04895824037327181,0.1267323224569195,0.001998001998001998,0.023976023976023976,True,better
+H9c CV combination + NLP combination vs CV combination,dd_40,fusion_combo_best,cv_combo_best,6550,0.06085430505360867,0.024126183783022934,0.09648253846923228,0.001998001998001998,0.023976023976023976,True,better

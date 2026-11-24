@@ -1,0 +1,13 @@
+family,task,A,B,n,delta,lo,hi,p,p_holm,supported,verdict
+H2c best NLP (panel) vs strongest numbers-only baseline,dir_5,roberta_l_panel_frozen,baseline_simple,6550,-0.022353603916432152,-0.039754194407269836,-0.0045396095783992296,0.011988011988011988,0.03596403596403597,False,worse
+H2c best NLP (panel) vs strongest numbers-only baseline,dir_10,longformer_panel_frozen,tech_gbm,6550,0.0464832173622535,0.024220501422825898,0.06656044877241118,0.003996003996003996,0.023976023976023976,True,better
+H2c best NLP (panel) vs strongest numbers-only baseline,dir_20,secbert_panel_ft,baseline_simple,6550,0.03009895202966678,-0.021329763462573655,0.07772841053576678,0.2597402597402597,0.5194805194805194,False,no clear difference
+H2c best NLP (panel) vs strongest numbers-only baseline,dir_40,deberta_l_panel_ft,tech_gbm,6550,-0.0033699342720057146,-0.033685246113571585,0.028752835883595635,0.8011988011988012,0.8011988011988012,False,no clear difference
+H2c best NLP (panel) vs strongest numbers-only baseline,vol_5,deberta_l_panel_frozen,tech_gbm,6550,-0.43492721578457794,-0.5547793745120226,-0.3208656704744113,0.001998001998001998,0.023976023976023976,False,worse
+H2c best NLP (panel) vs strongest numbers-only baseline,vol_10,deberta_l_panel_frozen,tech_gbm,6550,-0.44531879546493347,-0.5702835589839336,-0.3304851821183916,0.001998001998001998,0.023976023976023976,False,worse
+H2c best NLP (panel) vs strongest numbers-only baseline,vol_20,deberta_l_panel_frozen,tech_gbm,6550,-0.4269846436620812,-0.553508568138467,-0.30674280013594196,0.001998001998001998,0.023976023976023976,False,worse
+H2c best NLP (panel) vs strongest numbers-only baseline,vol_40,deberta_l_panel_frozen,tech_gbm,6550,-0.44995986004429867,-0.571050464002741,-0.33576858985241975,0.001998001998001998,0.023976023976023976,False,worse
+H2c best NLP (panel) vs strongest numbers-only baseline,dd_5,deberta_l_panel_frozen,baseline_simple,6550,-0.10949626682385305,-0.1572674947136896,-0.06386756151096334,0.001998001998001998,0.023976023976023976,False,worse
+H2c best NLP (panel) vs strongest numbers-only baseline,dd_10,roberta_l_panel_frozen,baseline_simple,6550,-0.06909913960468561,-0.10903412381533192,-0.03050755207683417,0.001998001998001998,0.023976023976023976,False,worse
+H2c best NLP (panel) vs strongest numbers-only baseline,dd_20,longformer_panel_frozen,baseline_simple,6550,-0.058047145429018454,-0.09401826952075258,-0.02216544735457999,0.001998001998001998,0.023976023976023976,False,worse
+H2c best NLP (panel) vs strongest numbers-only baseline,dd_40,longformer_panel_frozen,tech_gbm,6550,-0.05801599359976084,-0.09760087445885922,-0.022680026983387815,0.003996003996003996,0.023976023976023976,False,worse

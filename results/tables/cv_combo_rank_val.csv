@@ -1,0 +1,64 @@
+combo,mean_rank
+vit_b16,10.916666666666666
+vit_b16 + swin_t,11.333333333333334
+resnet50 + vit_b16 + swin_t,13.833333333333334
+resnet50 + vit_b16,14.916666666666666
+convnext_t + vit_b16 + swin_t,17.166666666666668
+effnet_b0 + vit_b16 + swin_t,17.833333333333332
+swin_t,17.833333333333332
+resnet50 + effnet_b0 + vit_b16,20.083333333333332
+vit_b16 + swin_t + yolov8_cls,20.916666666666668
+resnet50 + convnext_t + vit_b16,21.5
+convnext_t + vit_b16,21.666666666666668
+resnet50 + vit_b16 + yolov8_cls,21.916666666666668
+resnet50 + swin_t,22.916666666666668
+effnet_b0 + vit_b16,23.5
+vit_b16 + yolov8_cls,24.083333333333332
+effnet_b0 + convnext_t + vit_b16,24.166666666666668
+jkx_cnn + vit_b16 + swin_t,24.25
+resnet50 + effnet_b0 + swin_t,25.833333333333332
+effnet_b0 + swin_t,26.666666666666668
+resnet50 + convnext_t + swin_t,27.083333333333332
+jkx_cnn + effnet_b0 + vit_b16,27.25
+convnext_t + vit_b16 + yolov8_cls,28.0
+jkx_cnn + vit_b16,28.166666666666668
+effnet_b0 + convnext_t + swin_t,29.833333333333332
+convnext_t + swin_t,30.083333333333332
+jkx_cnn + resnet50 + vit_b16,30.166666666666668
+resnet50 + swin_t + yolov8_cls,30.333333333333332
+jkx_cnn + effnet_b0 + swin_t,30.75
+jkx_cnn + vit_b16 + yolov8_cls,31.0
+resnet50 + effnet_b0 + convnext_t,31.5
+resnet50,31.583333333333332
+effnet_b0 + vit_b16 + yolov8_cls,31.583333333333332
+resnet50 + effnet_b0,32.083333333333336
+swin_t + yolov8_cls,32.25
+jkx_cnn + convnext_t + vit_b16,32.25
+resnet50 + convnext_t,33.083333333333336
+jkx_cnn + swin_t,35.25
+jkx_cnn + swin_t + yolov8_cls,36.166666666666664
+resnet50 + yolov8_cls,36.5
+jkx_cnn + resnet50 + swin_t,36.833333333333336
+convnext_t + swin_t + yolov8_cls,37.0
+jkx_cnn + resnet50 + effnet_b0,37.583333333333336
+jkx_cnn + effnet_b0,37.75
+resnet50 + effnet_b0 + yolov8_cls,37.833333333333336
+effnet_b0 + swin_t + yolov8_cls,38.0
+effnet_b0 + convnext_t,38.833333333333336
+convnext_t,38.916666666666664
+jkx_cnn + convnext_t + swin_t,39.0
+resnet50 + convnext_t + yolov8_cls,39.0
+effnet_b0,39.583333333333336
+jkx_cnn + effnet_b0 + convnext_t,40.916666666666664
+jkx_cnn + effnet_b0 + yolov8_cls,43.083333333333336
+jkx_cnn + yolov8_cls,43.583333333333336
+jkx_cnn + resnet50 + yolov8_cls,43.916666666666664
+convnext_t + yolov8_cls,43.916666666666664
+jkx_cnn + convnext_t + yolov8_cls,44.916666666666664
+jkx_cnn + resnet50 + convnext_t,45.166666666666664
+effnet_b0 + yolov8_cls,46.166666666666664
+jkx_cnn + resnet50,46.333333333333336
+effnet_b0 + convnext_t + yolov8_cls,46.333333333333336
+yolov8_cls,46.833333333333336
+jkx_cnn + convnext_t,48.833333333333336
+jkx_cnn,49.416666666666664

@@ -1,0 +1,276 @@
+# %% [markdown]
+## 22. Freeze: every choice and every prediction is fixed before the test block opens
+
+The freeze manifest records: all selections (best models, top-3 members, combinations, fusion weights, Monte Carlo ν), the SHA-256 of every prediction file (test predictions already exist; their labels do not), the configuration hash, the data-package hash, the shared-core code hash and the package versions. §23 refuses to run without it. Re-freezing after a change is allowed but recorded in `freeze_history` and disclosed in the reports.
+
+# %%
+import importlib.metadata as ilm
+def _ver(p):
+    try:
+        return ilm.version(p)
+    except Exception:
+        return None
+SELECTIONS = {
+    "universe": TICKERS, "sector_of": SECTOR_OF, "replaced": REPLACED,
+    "cv": {"rank_val": CV_RANK.round(4).to_dict(), "best": CV_BEST, "best_per_task": BEST_CV_TASK, "top3": TOP3_CV, "best_combo": BEST_COMBO},
+    "nlp": {"rank_val": NLP_RANK.round(4).to_dict(), "best": NLP_BEST, "best_per_task": BEST_NLP_TASK, "panel_best_per_task": BEST_NLPP_TASK,
+            "panel_top3": TOP3_NLPP, "deploy_top3": NLP_DEPLOY_TOP3},
+    "fusion": {"ids": FUSION_IDS, "weights": FUSION_W}, "mc": MC_CFG,
+}
+POST_FREEZE_IDS = {"company_event", "simple_event", "tech_event", "fusion_tech_cv", "fusion_tech_nlp", "fusion_tech_cal", "fusion_tech_cal_co",
+                   "cv_combo_best", "nlp_combo_best", "nlpp_combo_best", "fusion_combo_best", "tech_event_lazy", "tech_event_textfeat"}      # created in sections 23A / 23B, after the test block was opened: never part of the freeze
+pred_hashes = {f"{p_.parent.name}/{p_.name}": sha256_file(p_) for p_ in sorted(SUB["preds"].glob("*/*.npz")) if p_.stem not in POST_FREEZE_IDS}
+FREEZE = {"project": CFG["project"], "run_mode": RUN_MODE, "frozen_utc": now_utc(), "config_hash": cfg_hash(CFG),
+          "data_manifest_sha256": DATA_MANIFEST_SHA256, "core_sha256": hashlib.sha256(CORE_SRC.encode()).hexdigest(),
+          "selections": SELECTIONS, "selections_sha256": cfg_hash(SELECTIONS), "prediction_files": pred_hashes,
+          "registry_models": {k: v.get("status") for k, v in REG.items()},
+          "packages": {p_: _ver(p_) for p_ in ["torch", "timm", "transformers", "peft", "bitsandbytes", "ultralytics", "lightgbm", "scikit-learn",
+                                                "numpy", "pandas", "streamlit", "yfinance", "reportlab"]},
+          "gpu": GPU_NAME, "python": platform.python_version()}
+_hist = []
+if FREEZE_PATH.exists():
+    old = json.loads(FREEZE_PATH.read_text())
+    if old.get("selections_sha256") == FREEZE["selections_sha256"] and old.get("config_hash") == FREEZE["config_hash"]:
+        # a resumed run with identical selections and configuration is not a re-freeze: keep the original freeze (time, history, file hashes)
+        FREEZE = old; FREEZE["resumed_utc"] = old.get("resumed_utc", []) + [now_utc()]; _hist = old.get("freeze_history", [])
+        print(f"Same selections and configuration as the freeze of {old.get('frozen_utc')}: original freeze kept (resumed {len(FREEZE['resumed_utc'])} time(s)).")
+    else:
+        _hist = old.get("freeze_history", []) + [{k: old.get(k) for k in ("frozen_utc", "selections_sha256", "config_hash")}]
+        print("NOTE: selections or configuration differ from the previous freeze; this re-freeze is recorded and disclosed in the reports.")
+FREEZE["freeze_history"] = _hist
+FREEZE_PATH.write_text(json.dumps(FREEZE, indent=1, default=str))
+print(f"Freeze manifest written: {len(pred_hashes)} prediction files, selections {FREEZE['selections_sha256']}, previous freezes {len(_hist)}")
+tick("22 freeze")
+
+# %% [markdown]
+## 23. The locked test block (2024-01 → 2026-08): opened once, everything answered
+
+# %%
+_lab = VAULT.open("panel_labels")
+for c_ in LABEL_COLS:
+    Y[c_][_lab["row"].values] = _lab[c_].values
+_le = VAULT.open("event_labels")
+for c_ in EV_LABELS:
+    YE[c_][_le["ev"].values] = _le[c_].values
+for c_ in REACT_COLS:
+    EV.loc[_le["ev"].values, c_] = _le[c_].values
+TEM, TEE = PANEL.mask["test"], EVENT.mask["test"]
+_diag = {"test_rows": int(TEM.sum()), "vault_rows": len(_lab), "finite_dir20": int(np.isfinite(PANEL.Y["dir_20"][TEM]).sum()),
+         "finite_vol20": int(np.isfinite(PANEL.Y["vol_20"][TEM]).sum()), "test_events": int(TEE.sum()),
+         "last_decision_date": str(P.loc[TEM, "date"].max().date()) if TEM.any() else None,
+         "pred_finite_prior": int(np.isfinite(load_pred("panel", "prior")["vol_20"][TEM]).sum())}
+print("Test diagnostics:", _diag)
+assert _diag["finite_dir20"] > 0, f"No test labels after opening the vault: {_diag}. Send this line to Claude Code."
+print(f"Test opened: {int(np.isfinite(Y['dir_20'][TEM]).sum()):,} panel rows, {int(np.isfinite(YE['dir_20'][TEE]).sum()):,} filing events. "
+      f"Openings logged: {len(json.loads(VAULT_LOG.read_text()))}")
+
+def skill_rows(ctx, model_by_task, mask, family):
+    rows = [{"family": family, "task": t, "model": m, **skill_test(ctx, t, load_pred(ctx.name, m)[t], mask)} for t, m in model_by_task.items()
+            if m and REG.get(m, {}).get("status") == "RUN"]
+    df = pd.DataFrame(rows)
+    if len(df):
+        df["p_holm"] = holm(df["p"].values); df["supported"] = (df["p_holm"] < CFG["alpha"]) & (df["lo"] > 0)
+    return df
+def delta_rows(ctx, pairs_by_task, mask, family):
+    rows = [{"family": family, "task": t, "A": a, "B": b, **paired_delta(ctx, t, load_pred(ctx.name, a)[t], load_pred(ctx.name, b)[t], mask)}
+            for t, (a, b) in pairs_by_task.items() if REG.get(a, {}).get("status") == "RUN" and REG.get(b, {}).get("status") == "RUN"]
+    df = pd.DataFrame(rows)
+    if len(df):
+        df["p_holm"] = holm(df["p"].values); df["supported"] = (df["p_holm"] < CFG["alpha"]) & (df["delta"] > 0)
+    return df
+
+# %% [markdown]
+### 23.1 Q1 and Q10: CV vs NLP vs CV+NLP at 5, 10, 20, 40 days (H1-H4)
+
+# %%
+Q1_TEST = q1_table(TEM, "test"); Q1_TEST_FRESH = q1_table(TEM & FRESH, "test_fresh")
+display(Q1_TEST.pivot_table(index="role", columns="task", values="primary").round(3))
+H1 = skill_rows(PANEL, BEST_CV_TASK, TEM, "H1 CV skill")
+H2 = skill_rows(EVENT, BEST_NLP_TASK, TEE, "H2 NLP skill (filing events)")
+H2p = skill_rows(PANEL, BEST_NLPP_TASK, TEM, "H2b NLP skill (panel)")
+_bf = {t: Q1_TEST[(Q1_TEST.task == t) & (Q1_TEST.role == "best fusion")]["model"].iloc[0] for t in TASKS
+       if ((Q1_TEST.task == t) & (Q1_TEST.role == "best fusion")).any()}
+_better = {t: (BEST_CV_TASK[t] if val_primary(BEST_CV_TASK[t], t) >= val_primary(BEST_NLPP_TASK.get(t, BEST_CV_TASK[t]), t) else BEST_NLPP_TASK[t])
+           for t in TASKS if t in BEST_CV_TASK}
+H3 = delta_rows(PANEL, {t: (_bf[t], _better[t]) for t in TASKS if t in _bf and t in _better}, TEM, "H3 fusion vs better single modality")
+H4 = delta_rows(PANEL, {t: ("fusion_late_top3", "cv_top3") for t in TASKS}, TEM, "H4 top-3 CV + top-3 NLP vs top-3 CV (Q10)")
+SKILL_DEPLOY = skill_rows(PANEL, {t: "deploy_recipe" for t in TASKS}, TEM, "dashboard recipe skill")
+for nm, df in [("H1", H1), ("H2", H2), ("H2b", H2p), ("H3", H3), ("H4", H4), ("deploy", SKILL_DEPLOY)]:
+    if len(df):
+        df.to_csv(SUB["tables"] / f"test_{nm}.csv", index=False); print(nm); display(df.round(4))
+
+# %% [markdown]
+### 23.2 - 23.3 Q2, Q3, Q4 on test: CV leaderboard, combinations and the best per target
+
+# %%
+LB_CV_TEST = leaderboard(PANEL, CV_MAIN + CV_OTHER + BASELINES + ["cv_top3", "cv_all7"], TEM); LB_CV_TEST.to_csv(SUB["tables"] / "cv_leaderboard_test.csv", index=False)
+PIV_CV_TEST = LB_CV_TEST[LB_CV_TEST.status == "RUN"].pivot_table(index="model", columns="task", values="primary")
+CV_RANK_TEST = mean_rank(LB_CV_TEST[LB_CV_TEST.model.isin(CV_MAIN)]); CV_RANK_TEST.to_frame("mean_rank_test").to_csv(SUB["tables"] / "cv_rank_test.csv")
+display(pd.concat([CV_RANK.rename("val_rank"), CV_RANK_TEST.rename("test_rank")], axis=1).round(2))
+COMBO_TEST = []
+if len(CV_MAIN) >= 2:
+    for k in (1, 2, 3):
+        for combo in itertools.combinations(CV_MAIN, k):
+            avg = average_predictions([load_pred("panel", m) for m in combo])
+            for t in TASKS:
+                r = PANEL.rows(t, TEM, avg[t])
+                COMBO_TEST.append({"combo": " + ".join(c.replace("_ft", "") for c in combo), "size": k, "task": t, "primary": primary_value(t, PANEL.Y[t][r], avg[t][r])})
+COMBO_TEST = pd.DataFrame(COMBO_TEST)
+if len(COMBO_TEST):
+    COMBO_TEST.to_csv(SUB["tables"] / "cv_combos_test.csv", index=False)
+    cr_t = COMBO_TEST.pivot_table(index="combo", columns="task", values="primary").rank(ascending=False).mean(1).sort_values()
+    cr_t.to_frame("mean_rank_test").to_csv(SUB["tables"] / "cv_combo_rank_test.csv")
+    print("Validation-chosen best combination:", BEST_COMBO, "| its test rank:", int((cr_t.index == BEST_COMBO).argmax()) + 1 if BEST_COMBO in cr_t.index else "n/a",
+          "of", len(cr_t)); display(cr_t.head(10).round(2))
+BEST_PER_TARGET = []
+for kd in ("dir", "vol", "dd"):
+    for t in [x for x in TASKS if x.startswith(kd)]:
+        cands = {m: PIV_CV_TEST.loc[m, t] for m in CV_MAIN + ["cv_top3", "cv_all7"] if m in PIV_CV_TEST.index}
+        BEST_PER_TARGET.append({"target": kd, "task": t, "val_choice": BEST_CV_TASK.get(t), "val_choice_test_score": PIV_CV_TEST.loc[BEST_CV_TASK[t], t] if BEST_CV_TASK.get(t) in PIV_CV_TEST.index else np.nan,
+                                "top3_test_score": cands.get("cv_top3"), "test_best_ex_post": max(cands, key=lambda z: cands[z]) if cands else None})
+BEST_PER_TARGET = pd.DataFrame(BEST_PER_TARGET); BEST_PER_TARGET.to_csv(SUB["tables"] / "cv_best_per_target_test.csv", index=False); display(BEST_PER_TARGET.round(3))
+H5 = []
+for n in FROZEN_CV:
+    a, b = f"{n}_ft", f"{n}_frozen"
+    if REG.get(a, {}).get("status") == "RUN" and REG.get(b, {}).get("status") == "RUN":
+        for kd in ("dir", "vol", "dd"):
+            H5.append({"family": "H5 fine-tuned vs frozen", "model": n, "target": kd, **paired_delta_family(PANEL, kd, load_pred("panel", a), load_pred("panel", b), TEM)})
+H5 = pd.DataFrame(H5)
+if len(H5):
+    H5["p_holm"] = holm(H5.p.values); H5["supported"] = (H5.p_holm < CFG["alpha"]) & (H5.delta > 0); H5.to_csv(SUB["tables"] / "test_H5.csv", index=False); display(H5.round(4))
+
+# %% [markdown]
+### 23.4 Q5 on test: sectors (H6)
+
+# %%
+if CV_MAIN:
+    SEC_CV_TEST = sector_table(PANEL, CV_MAIN, TEM); SEC_CV_TEST.to_csv(SUB["tables"] / "cv_sector_test.csv", index=False)
+    _sm = SEC_CV_TEST.groupby(["sector", "target", "model"])["primary"].mean().reset_index()
+    BEST_BY_SECTOR_TEST = best_rows(_sm, ["sector", "target"]).pivot(index="sector", columns="target", values="model")
+    BEST_BY_SECTOR_TEST.to_csv(SUB["tables"] / "cv_best_by_sector_test.csv")
+    agree = (BEST_BY_SECTOR_TEST == BEST_BY_SECTOR_VAL.reindex_like(BEST_BY_SECTOR_TEST)).values.mean()
+    print(f"Best CV model per sector and target on test (agreement with the validation choice: {agree:.0%}):"); display(BEST_BY_SECTOR_TEST)
+    H6 = pd.DataFrame([sector_interaction_test(PANEL, CV_MAIN, TEM, kd)[0] for kd in ("dir", "vol", "dd")]).assign(family="H6 sector x model interaction")
+    H6["supported"] = H6.p < CFG["alpha"]; H6.to_csv(SUB["tables"] / "test_H6.csv", index=False); display(H6)
+    NLP_SECTOR_TEST = by_group(EVENT, NLP_MAIN, TEE, EV["sector"].values, "sector") if NLP_MAIN else pd.DataFrame()
+    if len(NLP_SECTOR_TEST):
+        NLP_SECTOR_TEST.to_csv(SUB["tables"] / "nlp_by_sector_test.csv", index=False)
+else:
+    H6 = pd.DataFrame()
+
+# %% [markdown]
+### 23.5 Q6-Q9 on test: which reports move prices, where, and what in them (H7, replication)
+
+# %%
+rng = np.random.default_rng(12); CTRL_T = []
+for t in TICKERS:
+    d = BARS_D[t]; c = d["close"].values; dates = pd.DatetimeIndex(d["date"])
+    lr = np.r_[np.nan, np.diff(np.log(c))]; spy = SPY_D.set_index("date")["close"].reindex(dates).ffill().values
+    ar = lr - np.r_[np.nan, np.diff(np.log(spy))]; sig_ar = pd.Series(ar).rolling(SIGW, min_periods=SIGW).std().values
+    busy = np.zeros(len(d), bool)
+    for s in EV.loc[EV.ticker == t, "s_idx"]:
+        busy[max(0, s - 3): s + 4] = True
+    ok = np.flatnonzero(~busy & (dates >= BLK["test"][0]) & np.isfinite(sig_ar)); ok = ok[ok + 2 < len(d)]
+    for s in rng.choice(ok, min(len(ok), 4 * int(((EV.ticker == t) & TE_EV).sum())), replace=False):
+        ar2 = float(np.nansum(ar[s: s + 2]))
+        CTRL_T.append({"ticker": t, "sector": SECTOR_OF[t], "form": "no filing", "month": str(dates[s].to_period("M")),
+                       "abs_z": abs(ar2) / (sig_ar[s - 1] * math.sqrt(2)), "abn_volume": math.log((d["volume"].values[s] + 1) / (np.median(d["volume"].values[max(0, s - 20): s]) + 1))})
+CTRL_T = pd.DataFrame(CTRL_T)
+TEST_EV = EV[TE_EV]
+ES_FORM_TEST, KW_P_TEST, MW_P_TEST = event_study(TEST_EV, CTRL_T); ES_FORM_TEST.to_csv(SUB["tables"] / "event_study_by_form_test.csv", index=False)
+display(ES_FORM_TEST.round(3))
+H7 = pd.DataFrame([{"family": "H7 event study", "test": "filing days move more than non-filing days (Mann-Whitney, one-sided)", "p": MW_P_TEST, "p_dev": MW_P_DEV},
+                   {"family": "H7 event study", "test": "reaction size differs by form (Kruskal-Wallis)", "p": KW_P_TEST, "p_dev": KW_P_DEV}])
+H7["supported"] = H7.p < CFG["alpha"]; H7.to_csv(SUB["tables"] / "test_H7.csv", index=False); display(H7)
+ES_SECTOR_TEST = TEST_EV.groupby(["sector", "form"])["abs_z"].agg(["mean", "size"]).reset_index()
+ES_SECTOR_TEST["excess_over_non_filing_days"] = ES_SECTOR_TEST["mean"] - ES_SECTOR_TEST["sector"].map(CTRL_T.groupby("sector")["abs_z"].mean())
+ES_SECTOR_TEST.to_csv(SUB["tables"] / "event_study_sector_form_test.csv", index=False)
+_it = TEST_EV[TEST_EV.form == "8-K"].assign(item=TEST_EV["items"].str.split(",")).explode("item"); _it["item"] = _it["item"].str.strip()
+_it = _it[_it.item.isin(ES_ITEMS["item"])] if len(ES_ITEMS) else _it.iloc[0:0]
+ES_ITEMS_TEST = _it.groupby("item")["abs_z"].agg(["mean", "size"]).sort_values("mean", ascending=False)
+ES_ITEMS_TEST.to_csv(SUB["tables"] / "event_study_8k_items_test.csv")
+LB_NLP_TEST = leaderboard(EVENT, NLP_MAIN + NLP_OTHER, TEE); LB_NLP_TEST.to_csv(SUB["tables"] / "nlp_leaderboard_test.csv", index=False)
+NLP_RANK_TEST = mean_rank(LB_NLP_TEST[LB_NLP_TEST.model.isin(NLP_MAIN)]); NLP_RANK_TEST.to_frame("mean_rank_test").to_csv(SUB["tables"] / "nlp_rank_test.csv")
+NLP_FORM_TEST = by_group(EVENT, NLP_MAIN, TEE, EV["form"].values, "form") if NLP_MAIN else pd.DataFrame()
+if len(NLP_FORM_TEST):
+    NLP_FORM_TEST.to_csv(SUB["tables"] / "nlp_by_form_test.csv", index=False); display(NLP_FORM_TEST.groupby(["form", "target"])["primary"].max().unstack().round(3))
+LB_NLPP_TEST = leaderboard(PANEL, NLP_PANEL_ALL + ["nlp_panel_top3", "nlp_deploy_top3"], TEM); LB_NLPP_TEST.to_csv(SUB["tables"] / "nlp_panel_leaderboard_test.csv", index=False)
+LB_FUSION_TEST = leaderboard(PANEL, FUSION_IDS + ["fusion_tech", "deploy_recipe", "cv_top3", "nlp_panel_top3", "tech_gbm", "prior"], TEM)
+LB_FUSION_TEST.to_csv(SUB["tables"] / "fusion_leaderboard_test.csv", index=False)
+
+# %% [markdown]
+### 23.6 Monte Carlo coverage and recipe errors on test
+
+# %%
+MC_TEST = pd.DataFrame()
+if REG.get("deploy_recipe", {}).get("status") == "RUN":
+    d_ = mc_eval("deploy_recipe", TEM, MC_CFG["nu"], CFG["mc"]["eval_rows"], seed=1)
+    MC_TEST = pd.DataFrame([{"nu": MC_CFG["nu"] or "normal", "coverage80": float(d_.in80.mean()), "coverage90": float(d_.in90.mean()),
+                             "brier_dd_mc": float(np.mean((d_.p_dd_mc - d_.dd) ** 2)), "brier_dd_head": float(np.mean((d_.p_dd_head - d_.dd) ** 2)), "n": len(d_)}])
+    MC_TEST.to_csv(SUB["tables"] / "mc_calibration_test.csv", index=False); display(MC_TEST.round(3))
+    pr = load_pred("panel", "deploy_recipe")
+    fig, axes = plt.subplots(1, 4, figsize=(16, 3.6))
+    for a_, h in zip(axes, HORIZONS):
+        r = PANEL.rows(f"dir_{h}", TEM, pr[f"dir_{h}"])
+        cm = confusion_matrix(PANEL.Y[f"dir_{h}"][r].astype(int), pr[f"dir_{h}"][r].argmax(1), labels=[0, 1, 2], normalize="true")
+        a_.imshow(cm, cmap="Greens", vmin=0, vmax=1)
+        for i in range(3):
+            for j in range(3):
+                a_.text(j, i, f"{cm[i, j]:.2f}", ha="center", va="center", fontsize=8)
+        a_.set_xticks(range(3)); a_.set_xticklabels(CLASSES, fontsize=7); a_.set_yticks(range(3)); a_.set_yticklabels(CLASSES, fontsize=7)
+        a_.set_title(f"Dashboard recipe, {h}-day, test", fontsize=8)
+    plt.tight_layout(); savefig(fig, "deploy_confusion_test.png"); plt.show()
+
+# %% [markdown]
+### 23.7 Verdicts: hypotheses and the ten project questions
+
+# %%
+def fam_summary(df, name):
+    if df is None or not len(df):
+        return {"family": name, "tests": 0, "supported": 0, "verdict": "Not Run"}
+    k = int(df["supported"].sum())
+    return {"family": name, "tests": len(df), "supported": k, "verdict": "supported" if k == len(df) else ("partly supported" if k else "not supported")}
+HYP = pd.DataFrame([fam_summary(H1, "H1 CV has skill"), fam_summary(H2, "H2 NLP has skill (events)"), fam_summary(H2p, "H2b NLP has skill (panel)"),
+                    fam_summary(H3, "H3 fusion beats the better single modality"), fam_summary(H4, "H4 top-3 + top-3 beats top-3 CV"),
+                    fam_summary(H5, "H5 fine-tuning beats frozen"), fam_summary(H6, "H6 sector-specific rankings"), fam_summary(H7, "H7 filings move prices")])
+HYP.to_csv(SUB["tables"] / "hypotheses_test.csv", index=False); display(HYP)
+
+def _skill_line(df, t):
+    if df is None or not len(df) or t not in set(df.task):
+        return "Not Run"
+    r = df.set_index("task").loc[t]
+    return f"{r['model']}: skill {r['skill']:+.3f} [{r['lo']:+.3f}, {r['hi']:+.3f}]{' *' if r['supported'] else ''}"
+QANS = []
+for h in HORIZONS:
+    for kd in ("dir", "vol", "dd"):
+        t = f"{kd}_{h}"
+        QANS.append({"question": "Q1", "task": t, "CV": _skill_line(H1, t), "NLP (filings)": _skill_line(H2, t), "NLP (panel)": _skill_line(H2p, t),
+                     "fusion vs best single": (lambda d: "Not Run" if d is None or not len(d) or t not in set(d.task) else
+                                               f"{d.set_index('task').loc[t, 'delta']:+.4f} [{d.set_index('task').loc[t, 'lo']:+.4f}, {d.set_index('task').loc[t, 'hi']:+.4f}]")(H3)})
+Q1_ANS = pd.DataFrame(QANS); Q1_ANS.to_csv(SUB["tables"] / "q1_answers_test.csv", index=False)
+best_test_cv = CV_RANK_TEST.index[0] if len(CV_RANK_TEST) else None
+ANSWERS = {
+    "Q1": "See q1_answers_test.csv: '*' marks Holm-significant skill on the locked test block. " +
+          f"Direction skill supported for {int(H1[H1.task.str.startswith('dir')]['supported'].sum()) if len(H1) else 0}/4 horizons (CV), "
+          f"{int(H2p[H2p.task.str.startswith('dir')]['supported'].sum()) if len(H2p) else 0}/4 (NLP panel); "
+          f"fusion beat the better single modality in {int(H3['supported'].sum()) if len(H3) else 0}/{len(H3)} tasks.",
+    "Q2": f"Validation-chosen best CV model: {CV_BEST} (validation mean rank {CV_RANK.get(CV_BEST, float('nan')):.2f}); on test it ranks "
+          f"{int((CV_RANK_TEST.index == CV_BEST).argmax()) + 1 if CV_BEST in CV_RANK_TEST.index else 'n/a'} of {len(CV_RANK_TEST)}; best on test ex post: {best_test_cv}. " + WHY_CV,
+    "Q3": f"Best combination on validation: {BEST_COMBO}; see cv_combos_test.csv for its test standing and all 63 combinations.",
+    "Q4": "Best per target and horizon (validation choice and its test score): cv_best_per_target_test.csv.",
+    "Q5": "Best model per sector: cv_best_by_sector_test.csv; interaction test (H6) p-values: " + (", ".join(f"{r.target} {r.p:.3f}" for r in H6.itertuples()) if len(H6) else "Not Run"),
+    "Q6": "Reaction size by form (test): " + (", ".join(f"{r.group} |z| {r.mean_abs_z:.2f}" for r in ES_FORM_TEST.itertuples()) if len(ES_FORM_TEST) else "Not Run"),
+    "Q7": "Sector x form excess reaction over non-filing days: event_study_sector_form_test.csv (development: event_study_sector_form_dev.csv).",
+    "Q8": "8-K items ranked by reaction (event_study_8k_items_*.csv), n-grams (nlp_words_*.csv), FinBERT tone (nlp_tone_vs_reaction_dev.csv), attributions (nlp_integrated_gradients_val.csv).",
+    "Q9": "Same tables as Q7, read row by row: a sector is 'sensitive' to a form when its excess |z| CI is above zero in both development and test.",
+    "Q10": (f"Top-3 CV + top-3 NLP minus top-3 CV: supported in {int(H4['supported'].sum())}/{len(H4)} tasks after Holm." if len(H4) else "Not Run"),
+}
+NO_CALL = {f"dir_{h}": not bool(SKILL_DEPLOY.set_index("task").loc[f"dir_{h}", "supported"]) if len(SKILL_DEPLOY) and f"dir_{h}" in set(SKILL_DEPLOY.task) else True
+           for h in HORIZONS}
+FINAL = {"stamp": STAMP, "answers": ANSWERS, "hypotheses": HYP.to_dict("records"), "no_call_direction": NO_CALL,
+         "deploy_skill": SKILL_DEPLOY.to_dict("records") if len(SKILL_DEPLOY) else [], "mc_test": MC_TEST.to_dict("records"),
+         "test_openings": len(json.loads(VAULT_LOG.read_text())), "freeze_sha": FREEZE["selections_sha256"], "freeze_history": len(FREEZE["freeze_history"])}
+(SUB["results"] / "final_results.json").write_text(json.dumps(FINAL, indent=1, default=str))
+for k, v in ANSWERS.items():
+    display(Markdown(f"**{k}.** {v}"))
+tick("23 test")

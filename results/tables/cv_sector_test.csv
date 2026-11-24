@@ -1,0 +1,421 @@
+sector,model,task,target,n,primary
+Information Technology,jkx_cnn_ft,dir_5,dir,1310,0.21532545502061726
+Information Technology,jkx_cnn_ft,dir_10,dir,1310,0.2095287532858168
+Information Technology,jkx_cnn_ft,dir_20,dir,1310,0.269031621700029
+Information Technology,jkx_cnn_ft,dir_40,dir,1310,0.2870395158601944
+Information Technology,jkx_cnn_ft,vol_5,vol,1310,-0.23057320926915015
+Information Technology,jkx_cnn_ft,vol_10,vol,1310,-0.3468714649462392
+Information Technology,jkx_cnn_ft,vol_20,vol,1310,-0.4878315117521408
+Information Technology,jkx_cnn_ft,vol_40,vol,1310,-0.7480703369206387
+Information Technology,jkx_cnn_ft,dd_5,dd,1310,0.5549806843267108
+Information Technology,jkx_cnn_ft,dd_10,dd,1310,0.5700788288288289
+Information Technology,jkx_cnn_ft,dd_20,dd,1310,0.5527725575018321
+Information Technology,jkx_cnn_ft,dd_40,dd,1310,0.5153727836654666
+Information Technology,resnet50_ft,dir_5,dir,1310,0.2713994742406716
+Information Technology,resnet50_ft,dir_10,dir,1310,0.3421697009079702
+Information Technology,resnet50_ft,dir_20,dir,1310,0.3378872377566851
+Information Technology,resnet50_ft,dir_40,dir,1310,0.3664108797212462
+Information Technology,resnet50_ft,vol_5,vol,1310,-0.15568006713815152
+Information Technology,resnet50_ft,vol_10,vol,1310,-0.2807713479395413
+Information Technology,resnet50_ft,vol_20,vol,1310,-0.5460119687141796
+Information Technology,resnet50_ft,vol_40,vol,1310,-0.8593575125094501
+Information Technology,resnet50_ft,dd_5,dd,1310,0.6792624334502013
+Information Technology,resnet50_ft,dd_10,dd,1310,0.6621914414414415
+Information Technology,resnet50_ft,dd_20,dd,1310,0.6182023142566722
+Information Technology,resnet50_ft,dd_40,dd,1310,0.6018952482367117
+Information Technology,effnet_b0_ft,dir_5,dir,1310,0.20808404072034678
+Information Technology,effnet_b0_ft,dir_10,dir,1310,0.2075347591476624
+Information Technology,effnet_b0_ft,dir_20,dir,1310,0.2813910299165045
+Information Technology,effnet_b0_ft,dir_40,dir,1310,0.3183533492469399
+Information Technology,effnet_b0_ft,vol_5,vol,1310,-0.505106738264723
+Information Technology,effnet_b0_ft,vol_10,vol,1310,-0.6200224878232301
+Information Technology,effnet_b0_ft,vol_20,vol,1310,-0.7478878201915089
+Information Technology,effnet_b0_ft,vol_40,vol,1310,-1.0585574252141083
+Information Technology,effnet_b0_ft,dd_5,dd,1310,0.41236121932216596
+Information Technology,effnet_b0_ft,dd_10,dd,1310,0.5792725225225225
+Information Technology,effnet_b0_ft,dd_20,dd,1310,0.5564292130581755
+Information Technology,effnet_b0_ft,dd_40,dd,1310,0.4990003404637551
+Information Technology,convnext_t_ft,dir_5,dir,1310,0.3392087052779944
+Information Technology,convnext_t_ft,dir_10,dir,1310,0.36855374551634973
+Information Technology,convnext_t_ft,dir_20,dir,1310,0.3477941606674188
+Information Technology,convnext_t_ft,dir_40,dir,1310,0.3349370278335373
+Information Technology,convnext_t_ft,vol_5,vol,1310,-0.3161601775104763
+Information Technology,convnext_t_ft,vol_10,vol,1310,-0.4297809463273867
+Information Technology,convnext_t_ft,vol_20,vol,1310,-0.6707263922495355
+Information Technology,convnext_t_ft,vol_40,vol,1310,-0.9673632513320203
+Information Technology,convnext_t_ft,dd_5,dd,1310,0.6191484872094534
+Information Technology,convnext_t_ft,dd_10,dd,1310,0.6444954954954955
+Information Technology,convnext_t_ft,dd_20,dd,1310,0.5954025128241496
+Information Technology,convnext_t_ft,dd_40,dd,1310,0.5617144885437568
+Information Technology,vit_b16_ft,dir_5,dir,1310,0.32037191605482745
+Information Technology,vit_b16_ft,dir_10,dir,1310,0.3272258913784847
+Information Technology,vit_b16_ft,dir_20,dir,1310,0.31631274152216643
+Information Technology,vit_b16_ft,dir_40,dir,1310,0.30087596550156337
+Information Technology,vit_b16_ft,vol_5,vol,1310,-0.14653929701871227
+Information Technology,vit_b16_ft,vol_10,vol,1310,-0.24731720373849808
+Information Technology,vit_b16_ft,vol_20,vol,1310,-0.43933563208271464
+Information Technology,vit_b16_ft,vol_40,vol,1310,-0.7359060815046579
+Information Technology,vit_b16_ft,dd_5,dd,1310,0.6416252759381899
+Information Technology,vit_b16_ft,dd_10,dd,1310,0.6451103603603604
+Information Technology,vit_b16_ft,dd_20,dd,1310,0.6159285393470912
+Information Technology,vit_b16_ft,dd_40,dd,1310,0.5852511584218901
+Information Technology,swin_t_ft,dir_5,dir,1310,0.3041904952593093
+Information Technology,swin_t_ft,dir_10,dir,1310,0.3362347579886891
+Information Technology,swin_t_ft,dir_20,dir,1310,0.3428567861779686
+Information Technology,swin_t_ft,dir_40,dir,1310,0.32165870647641204
+Information Technology,swin_t_ft,vol_5,vol,1310,-0.096354965552919
+Information Technology,swin_t_ft,vol_10,vol,1310,-0.2506433420398244
+Information Technology,swin_t_ft,vol_20,vol,1310,-0.4947766758195704
+Information Technology,swin_t_ft,vol_40,vol,1310,-0.7732494037557263
+Information Technology,swin_t_ft,dd_5,dd,1310,0.6670602843786522
+Information Technology,swin_t_ft,dd_10,dd,1310,0.6559076576576577
+Information Technology,swin_t_ft,dd_20,dd,1310,0.3806763113727159
+Information Technology,swin_t_ft,dd_40,dd,1310,0.6126995395288078
+Information Technology,yolov8_cls_ft,dir_5,dir,1310,0.2781144300939347
+Information Technology,yolov8_cls_ft,dir_10,dir,1310,0.289132207504663
+Information Technology,yolov8_cls_ft,dir_20,dir,1310,0.30448898205531183
+Information Technology,yolov8_cls_ft,dir_40,dir,1310,0.33684437543133194
+Information Technology,yolov8_cls_ft,vol_5,vol,1310,-0.4488728737879528
+Information Technology,yolov8_cls_ft,vol_10,vol,1310,-0.5612425379957173
+Information Technology,yolov8_cls_ft,vol_20,vol,1310,-0.6768412307730491
+Information Technology,yolov8_cls_ft,vol_40,vol,1310,-0.9929497768556845
+Information Technology,yolov8_cls_ft,dd_5,dd,1310,0.5939001428385924
+Information Technology,yolov8_cls_ft,dd_10,dd,1310,0.5931306306306307
+Information Technology,yolov8_cls_ft,dd_20,dd,1310,0.5747952272888448
+Information Technology,yolov8_cls_ft,dd_40,dd,1310,0.54542776493996
+Financials,jkx_cnn_ft,dir_5,dir,1310,0.25806058903404033
+Financials,jkx_cnn_ft,dir_10,dir,1310,0.24822195193112884
+Financials,jkx_cnn_ft,dir_20,dir,1310,0.2905429032213069
+Financials,jkx_cnn_ft,dir_40,dir,1310,0.30066517757392547
+Financials,jkx_cnn_ft,vol_5,vol,1310,0.02132292216514553
+Financials,jkx_cnn_ft,vol_10,vol,1310,0.001468941853538186
+Financials,jkx_cnn_ft,vol_20,vol,1310,0.020276723581787226
+Financials,jkx_cnn_ft,vol_40,vol,1310,0.010357767946217122
+Financials,jkx_cnn_ft,dd_5,dd,1310,0.49574338704773485
+Financials,jkx_cnn_ft,dd_10,dd,1310,0.4923688074263522
+Financials,jkx_cnn_ft,dd_20,dd,1310,0.48203795233312985
+Financials,jkx_cnn_ft,dd_40,dd,1310,0.5050615550403291
+Financials,resnet50_ft,dir_5,dir,1310,0.29581886052720713
+Financials,resnet50_ft,dir_10,dir,1310,0.3557636809237194
+Financials,resnet50_ft,dir_20,dir,1310,0.3465224875414424
+Financials,resnet50_ft,dir_40,dir,1310,0.33375356459907773
+Financials,resnet50_ft,vol_5,vol,1310,0.04359361085461133
+Financials,resnet50_ft,vol_10,vol,1310,0.01948871771292482
+Financials,resnet50_ft,vol_20,vol,1310,0.006639733625241839
+Financials,resnet50_ft,vol_40,vol,1310,-0.02896204266776703
+Financials,resnet50_ft,dd_5,dd,1310,0.5771933380629033
+Financials,resnet50_ft,dd_10,dd,1310,0.5427382305579237
+Financials,resnet50_ft,dd_20,dd,1310,0.571477331652981
+Financials,resnet50_ft,dd_40,dd,1310,0.5490970838911929
+Financials,effnet_b0_ft,dir_5,dir,1310,0.22821130267475076
+Financials,effnet_b0_ft,dir_10,dir,1310,0.2630282915073674
+Financials,effnet_b0_ft,dir_20,dir,1310,0.32653139364304296
+Financials,effnet_b0_ft,dir_40,dir,1310,0.3446389010638387
+Financials,effnet_b0_ft,vol_5,vol,1310,0.009879504525241223
+Financials,effnet_b0_ft,vol_10,vol,1310,-0.0016742268800158389
+Financials,effnet_b0_ft,vol_20,vol,1310,-0.011858737451168722
+Financials,effnet_b0_ft,vol_40,vol,1310,-0.008964473405342455
+Financials,effnet_b0_ft,dd_5,dd,1310,0.5566366001148609
+Financials,effnet_b0_ft,dd_10,dd,1310,0.39316330396893057
+Financials,effnet_b0_ft,dd_20,dd,1310,0.4866457935398329
+Financials,effnet_b0_ft,dd_40,dd,1310,0.5251098030891813
+Financials,convnext_t_ft,dir_5,dir,1310,0.3730693357651975
+Financials,convnext_t_ft,dir_10,dir,1310,0.37340488818507067
+Financials,convnext_t_ft,dir_20,dir,1310,0.3839497662569142
+Financials,convnext_t_ft,dir_40,dir,1310,0.40963018466983675
+Financials,convnext_t_ft,vol_5,vol,1310,0.0511799390603529
+Financials,convnext_t_ft,vol_10,vol,1310,0.042328153259635015
+Financials,convnext_t_ft,vol_20,vol,1310,0.01820240595064715
+Financials,convnext_t_ft,vol_40,vol,1310,-0.006611910234890939
+Financials,convnext_t_ft,dd_5,dd,1310,0.6093037397385224
+Financials,convnext_t_ft,dd_10,dd,1310,0.6431041015439992
+Financials,convnext_t_ft,dd_20,dd,1310,0.6505589140722945
+Financials,convnext_t_ft,dd_40,dd,1310,0.6203650034287953
+Financials,vit_b16_ft,dir_5,dir,1310,0.32281903376025395
+Financials,vit_b16_ft,dir_10,dir,1310,0.3514131776936204
+Financials,vit_b16_ft,dir_20,dir,1310,0.3508420371451075
+Financials,vit_b16_ft,dir_40,dir,1310,0.37408024143089436
+Financials,vit_b16_ft,vol_5,vol,1310,0.12815661559517
+Financials,vit_b16_ft,vol_10,vol,1310,0.09316013220802111
+Financials,vit_b16_ft,vol_20,vol,1310,0.08558864143867162
+Financials,vit_b16_ft,vol_40,vol,1310,0.019463581568240906
+Financials,vit_b16_ft,dd_5,dd,1310,0.5471098949359819
+Financials,vit_b16_ft,dd_10,dd,1310,0.5945995547977645
+Financials,vit_b16_ft,dd_20,dd,1310,0.5815266263644658
+Financials,vit_b16_ft,dd_40,dd,1310,0.5883057669072266
+Financials,swin_t_ft,dir_5,dir,1310,0.32795750726817496
+Financials,swin_t_ft,dir_10,dir,1310,0.35378771765261724
+Financials,swin_t_ft,dir_20,dir,1310,0.3469625156086273
+Financials,swin_t_ft,dir_40,dir,1310,0.33382978868406826
+Financials,swin_t_ft,vol_5,vol,1310,0.09474398241135107
+Financials,swin_t_ft,vol_10,vol,1310,0.05310631969978774
+Financials,swin_t_ft,vol_20,vol,1310,0.01436334016267915
+Financials,swin_t_ft,vol_40,vol,1310,-0.022346112346919522
+Financials,swin_t_ft,dd_5,dd,1310,0.44951184081618867
+Financials,swin_t_ft,dd_10,dd,1310,0.4514125698588614
+Financials,swin_t_ft,dd_20,dd,1310,0.5641257901266171
+Financials,swin_t_ft,dd_40,dd,1310,0.45343777552819775
+Financials,yolov8_cls_ft,dir_5,dir,1310,0.33817898075373326
+Financials,yolov8_cls_ft,dir_10,dir,1310,0.3321033930494703
+Financials,yolov8_cls_ft,dir_20,dir,1310,0.3591668249655588
+Financials,yolov8_cls_ft,dir_40,dir,1310,0.35541266278680883
+Financials,yolov8_cls_ft,vol_5,vol,1310,0.027411324142356697
+Financials,yolov8_cls_ft,vol_10,vol,1310,0.030873931326288795
+Financials,yolov8_cls_ft,vol_20,vol,1310,0.031548974915825756
+Financials,yolov8_cls_ft,vol_40,vol,1310,0.012746239216662292
+Financials,yolov8_cls_ft,dd_5,dd,1310,0.7579642579642579
+Financials,yolov8_cls_ft,dd_10,dd,1310,0.6495038836790755
+Financials,yolov8_cls_ft,dd_20,dd,1310,0.6637785610670237
+Financials,yolov8_cls_ft,dd_40,dd,1310,0.6560163112693074
+Health Care,jkx_cnn_ft,dir_5,dir,1310,0.2435868397363301
+Health Care,jkx_cnn_ft,dir_10,dir,1310,0.2214580813903907
+Health Care,jkx_cnn_ft,dir_20,dir,1310,0.26874910983749906
+Health Care,jkx_cnn_ft,dir_40,dir,1310,0.2622348703046144
+Health Care,jkx_cnn_ft,vol_5,vol,1310,-0.03548634456559463
+Health Care,jkx_cnn_ft,vol_10,vol,1310,-0.09776595771252716
+Health Care,jkx_cnn_ft,vol_20,vol,1310,-0.1425525447016167
+Health Care,jkx_cnn_ft,vol_40,vol,1310,-0.24761192371773655
+Health Care,jkx_cnn_ft,dd_5,dd,1310,0.4528403361344538
+Health Care,jkx_cnn_ft,dd_10,dd,1310,0.44621980113415677
+Health Care,jkx_cnn_ft,dd_20,dd,1310,0.45429907714881457
+Health Care,jkx_cnn_ft,dd_40,dd,1310,0.4584615965429919
+Health Care,resnet50_ft,dir_5,dir,1310,0.32756564714534253
+Health Care,resnet50_ft,dir_10,dir,1310,0.3495371926899386
+Health Care,resnet50_ft,dir_20,dir,1310,0.3293098801328092
+Health Care,resnet50_ft,dir_40,dir,1310,0.3237442426306651
+Health Care,resnet50_ft,vol_5,vol,1310,-0.023345522685999542
+Health Care,resnet50_ft,vol_10,vol,1310,-0.09243844780432853
+Health Care,resnet50_ft,vol_20,vol,1310,-0.16218029200326045
+Health Care,resnet50_ft,vol_40,vol,1310,-0.24209187207063976
+Health Care,resnet50_ft,dd_5,dd,1310,0.5826778711484594
+Health Care,resnet50_ft,dd_10,dd,1310,0.5423075429192884
+Health Care,resnet50_ft,dd_20,dd,1310,0.5326521353000232
+Health Care,resnet50_ft,dd_40,dd,1310,0.5062974815881792
+Health Care,effnet_b0_ft,dir_5,dir,1310,0.18125402518976144
+Health Care,effnet_b0_ft,dir_10,dir,1310,0.19886785610332383
+Health Care,effnet_b0_ft,dir_20,dir,1310,0.28454128857658784
+Health Care,effnet_b0_ft,dir_40,dir,1310,0.32846350240657074
+Health Care,effnet_b0_ft,vol_5,vol,1310,-0.020479024431980353
+Health Care,effnet_b0_ft,vol_10,vol,1310,-0.05080058764710094
+Health Care,effnet_b0_ft,vol_20,vol,1310,-0.06972659556415772
+Health Care,effnet_b0_ft,vol_40,vol,1310,-0.13023266077211115
+Health Care,effnet_b0_ft,dd_5,dd,1310,0.49411764705882355
+Health Care,effnet_b0_ft,dd_10,dd,1310,0.4729326885729822
+Health Care,effnet_b0_ft,dd_20,dd,1310,0.4571564406517878
+Health Care,effnet_b0_ft,dd_40,dd,1310,0.4727438259415004
+Health Care,convnext_t_ft,dir_5,dir,1310,0.35845129611288673
+Health Care,convnext_t_ft,dir_10,dir,1310,0.3588527963614451
+Health Care,convnext_t_ft,dir_20,dir,1310,0.3863253861323215
+Health Care,convnext_t_ft,dir_40,dir,1310,0.417043982275404
+Health Care,convnext_t_ft,vol_5,vol,1310,-0.033430302977076165
+Health Care,convnext_t_ft,vol_10,vol,1310,-0.08251882794666732
+Health Care,convnext_t_ft,vol_20,vol,1310,-0.15900022569706285
+Health Care,convnext_t_ft,vol_40,vol,1310,-0.24722289457566848
+Health Care,convnext_t_ft,dd_5,dd,1310,0.5427002801120449
+Health Care,convnext_t_ft,dd_10,dd,1310,0.5654373494911831
+Health Care,convnext_t_ft,dd_20,dd,1310,0.5516038883311453
+Health Care,convnext_t_ft,dd_40,dd,1310,0.5533550751574008
+Health Care,vit_b16_ft,dir_5,dir,1310,0.32959329875668386
+Health Care,vit_b16_ft,dir_10,dir,1310,0.35260502525853515
+Health Care,vit_b16_ft,dir_20,dir,1310,0.3742900795980671
+Health Care,vit_b16_ft,dir_40,dir,1310,0.36860314212196693
+Health Care,vit_b16_ft,vol_5,vol,1310,-0.053539720063788154
+Health Care,vit_b16_ft,vol_10,vol,1310,-0.10912559140203637
+Health Care,vit_b16_ft,vol_20,vol,1310,-0.17681980730831182
+Health Care,vit_b16_ft,vol_40,vol,1310,-0.2817334221568717
+Health Care,vit_b16_ft,dd_5,dd,1310,0.5219719887955182
+Health Care,vit_b16_ft,dd_10,dd,1310,0.5423463839042958
+Health Care,vit_b16_ft,dd_20,dd,1310,0.5412700787705614
+Health Care,vit_b16_ft,dd_40,dd,1310,0.5352902911042446
+Health Care,swin_t_ft,dir_5,dir,1310,0.29185464619936496
+Health Care,swin_t_ft,dir_10,dir,1310,0.34333733600368116
+Health Care,swin_t_ft,dir_20,dir,1310,0.35337522773720725
+Health Care,swin_t_ft,dir_40,dir,1310,0.36285864545144
+Health Care,swin_t_ft,vol_5,vol,1310,-0.03197794725746017
+Health Care,swin_t_ft,vol_10,vol,1310,-0.07569957473395061
+Health Care,swin_t_ft,vol_20,vol,1310,-0.12126807321021449
+Health Care,swin_t_ft,vol_40,vol,1310,-0.18065145554732553
+Health Care,swin_t_ft,dd_5,dd,1310,0.579843137254902
+Health Care,swin_t_ft,dd_10,dd,1310,0.5859162588363241
+Health Care,swin_t_ft,dd_20,dd,1310,0.43936066491620973
+Health Care,swin_t_ft,dd_40,dd,1310,0.5488377901168598
+Health Care,yolov8_cls_ft,dir_5,dir,1310,0.27260818269761783
+Health Care,yolov8_cls_ft,dir_10,dir,1310,0.2766056038276732
+Health Care,yolov8_cls_ft,dir_20,dir,1310,0.26322453204115764
+Health Care,yolov8_cls_ft,dir_40,dir,1310,0.32719305008589367
+Health Care,yolov8_cls_ft,vol_5,vol,1310,0.0035938380667333014
+Health Care,yolov8_cls_ft,vol_10,vol,1310,-0.02011445954840374
+Health Care,yolov8_cls_ft,vol_20,vol,1310,-0.04150808521478755
+Health Care,yolov8_cls_ft,vol_40,vol,1310,-0.12257364974430862
+Health Care,yolov8_cls_ft,dd_5,dd,1310,0.4436638655462185
+Health Care,yolov8_cls_ft,dd_10,dd,1310,0.4485454051114736
+Health Care,yolov8_cls_ft,dd_20,dd,1310,0.48719737045331685
+Health Care,yolov8_cls_ft,dd_40,dd,1310,0.5012124503403573
+Consumer Discretionary,jkx_cnn_ft,dir_5,dir,1310,0.24856166368060362
+Consumer Discretionary,jkx_cnn_ft,dir_10,dir,1310,0.2200808150486646
+Consumer Discretionary,jkx_cnn_ft,dir_20,dir,1310,0.27276672835081056
+Consumer Discretionary,jkx_cnn_ft,dir_40,dir,1310,0.2659308285241535
+Consumer Discretionary,jkx_cnn_ft,vol_5,vol,1310,-0.05463136568653315
+Consumer Discretionary,jkx_cnn_ft,vol_10,vol,1310,-0.09736703604341268
+Consumer Discretionary,jkx_cnn_ft,vol_20,vol,1310,-0.13353364003095192
+Consumer Discretionary,jkx_cnn_ft,vol_40,vol,1310,-0.21973128079291127
+Consumer Discretionary,jkx_cnn_ft,dd_5,dd,1310,0.41889068419879655
+Consumer Discretionary,jkx_cnn_ft,dd_10,dd,1310,0.45727873100135874
+Consumer Discretionary,jkx_cnn_ft,dd_20,dd,1310,0.47868959073755174
+Consumer Discretionary,jkx_cnn_ft,dd_40,dd,1310,0.49920873578263225
+Consumer Discretionary,resnet50_ft,dir_5,dir,1310,0.3082641067104159
+Consumer Discretionary,resnet50_ft,dir_10,dir,1310,0.3440485735547108
+Consumer Discretionary,resnet50_ft,dir_20,dir,1310,0.37824313191301995
+Consumer Discretionary,resnet50_ft,dir_40,dir,1310,0.3888856953801425
+Consumer Discretionary,resnet50_ft,vol_5,vol,1310,0.03536661730757151
+Consumer Discretionary,resnet50_ft,vol_10,vol,1310,-0.012809635849423184
+Consumer Discretionary,resnet50_ft,vol_20,vol,1310,-0.10932646233362342
+Consumer Discretionary,resnet50_ft,vol_40,vol,1310,-0.21207645077214043
+Consumer Discretionary,resnet50_ft,dd_5,dd,1310,0.5946205705371072
+Consumer Discretionary,resnet50_ft,dd_10,dd,1310,0.5907405651931199
+Consumer Discretionary,resnet50_ft,dd_20,dd,1310,0.5610573223903565
+Consumer Discretionary,resnet50_ft,dd_40,dd,1310,0.5495449878136848
+Consumer Discretionary,effnet_b0_ft,dir_5,dir,1310,0.20104815683772173
+Consumer Discretionary,effnet_b0_ft,dir_10,dir,1310,0.1987124508979289
+Consumer Discretionary,effnet_b0_ft,dir_20,dir,1310,0.26948447681977983
+Consumer Discretionary,effnet_b0_ft,dir_40,dir,1310,0.33136717316434083
+Consumer Discretionary,effnet_b0_ft,vol_5,vol,1310,0.008604445375030134
+Consumer Discretionary,effnet_b0_ft,vol_10,vol,1310,0.005032290825163543
+Consumer Discretionary,effnet_b0_ft,vol_20,vol,1310,0.012619768343553384
+Consumer Discretionary,effnet_b0_ft,vol_40,vol,1310,-0.05023096230588986
+Consumer Discretionary,effnet_b0_ft,dd_5,dd,1310,0.5177735680855806
+Consumer Discretionary,effnet_b0_ft,dd_10,dd,1310,0.5392348932494918
+Consumer Discretionary,effnet_b0_ft,dd_20,dd,1310,0.4792071227054556
+Consumer Discretionary,effnet_b0_ft,dd_40,dd,1310,0.4593408670337606
+Consumer Discretionary,convnext_t_ft,dir_5,dir,1310,0.33982411932136997
+Consumer Discretionary,convnext_t_ft,dir_10,dir,1310,0.3800079184981359
+Consumer Discretionary,convnext_t_ft,dir_20,dir,1310,0.37726504758885726
+Consumer Discretionary,convnext_t_ft,dir_40,dir,1310,0.3820044634398016
+Consumer Discretionary,convnext_t_ft,vol_5,vol,1310,-0.0001884033501786675
+Consumer Discretionary,convnext_t_ft,vol_10,vol,1310,-0.034204784395128085
+Consumer Discretionary,convnext_t_ft,vol_20,vol,1310,-0.10936236736245242
+Consumer Discretionary,convnext_t_ft,vol_40,vol,1310,-0.19214982896752653
+Consumer Discretionary,convnext_t_ft,dd_5,dd,1310,0.6419099621127702
+Consumer Discretionary,convnext_t_ft,dd_10,dd,1310,0.580702752235599
+Consumer Discretionary,convnext_t_ft,dd_20,dd,1310,0.5254437951122999
+Consumer Discretionary,convnext_t_ft,dd_40,dd,1310,0.5285024372630439
+Consumer Discretionary,vit_b16_ft,dir_5,dir,1310,0.33653808432279586
+Consumer Discretionary,vit_b16_ft,dir_10,dir,1310,0.3512302760364141
+Consumer Discretionary,vit_b16_ft,dir_20,dir,1310,0.335632349770078
+Consumer Discretionary,vit_b16_ft,dir_40,dir,1310,0.3328668406458829
+Consumer Discretionary,vit_b16_ft,vol_5,vol,1310,0.06936152838134058
+Consumer Discretionary,vit_b16_ft,vol_10,vol,1310,0.036875216605080086
+Consumer Discretionary,vit_b16_ft,vol_20,vol,1310,-0.022226895743416186
+Consumer Discretionary,vit_b16_ft,vol_40,vol,1310,-0.11608945443522045
+Consumer Discretionary,vit_b16_ft,dd_5,dd,1310,0.5215762201916648
+Consumer Discretionary,vit_b16_ft,dd_10,dd,1310,0.5272011038434397
+Consumer Discretionary,vit_b16_ft,dd_20,dd,1310,0.5226111090755872
+Consumer Discretionary,vit_b16_ft,dd_40,dd,1310,0.5154374097309984
+Consumer Discretionary,swin_t_ft,dir_5,dir,1310,0.31363626723507476
+Consumer Discretionary,swin_t_ft,dir_10,dir,1310,0.34411035359708503
+Consumer Discretionary,swin_t_ft,dir_20,dir,1310,0.3507805458760476
+Consumer Discretionary,swin_t_ft,dir_40,dir,1310,0.34811191099225613
+Consumer Discretionary,swin_t_ft,vol_5,vol,1310,0.06400217786975637
+Consumer Discretionary,swin_t_ft,vol_10,vol,1310,0.02118099746362556
+Consumer Discretionary,swin_t_ft,vol_20,vol,1310,-0.027943688399357125
+Consumer Discretionary,swin_t_ft,vol_40,vol,1310,-0.0946808563808208
+Consumer Discretionary,swin_t_ft,dd_5,dd,1310,0.5823907956318253
+Consumer Discretionary,swin_t_ft,dd_10,dd,1310,0.5242413709566994
+Consumer Discretionary,swin_t_ft,dd_20,dd,1310,0.46787637855860476
+Consumer Discretionary,swin_t_ft,dd_40,dd,1310,0.540726834717458
+Consumer Discretionary,yolov8_cls_ft,dir_5,dir,1310,0.2680457761847646
+Consumer Discretionary,yolov8_cls_ft,dir_10,dir,1310,0.283320425501814
+Consumer Discretionary,yolov8_cls_ft,dir_20,dir,1310,0.2911704298641049
+Consumer Discretionary,yolov8_cls_ft,dir_40,dir,1310,0.32011771608092504
+Consumer Discretionary,yolov8_cls_ft,vol_5,vol,1310,0.010377891880331669
+Consumer Discretionary,yolov8_cls_ft,vol_10,vol,1310,-0.005642002467389995
+Consumer Discretionary,yolov8_cls_ft,vol_20,vol,1310,-0.04802673282507919
+Consumer Discretionary,yolov8_cls_ft,vol_40,vol,1310,-0.15543355694353256
+Consumer Discretionary,yolov8_cls_ft,dd_5,dd,1310,0.4668765322041453
+Consumer Discretionary,yolov8_cls_ft,dd_10,dd,1310,0.46287167820014535
+Consumer Discretionary,yolov8_cls_ft,dd_20,dd,1310,0.44519428058476535
+Consumer Discretionary,yolov8_cls_ft,dd_40,dd,1310,0.4465776764758982
+Communication Services,jkx_cnn_ft,dir_5,dir,1310,0.22675951104992284
+Communication Services,jkx_cnn_ft,dir_10,dir,1310,0.21228755956328882
+Communication Services,jkx_cnn_ft,dir_20,dir,1310,0.29541901540774146
+Communication Services,jkx_cnn_ft,dir_40,dir,1310,0.2659680372458629
+Communication Services,jkx_cnn_ft,vol_5,vol,1310,-0.1400859872326614
+Communication Services,jkx_cnn_ft,vol_10,vol,1310,-0.21691999066724454
+Communication Services,jkx_cnn_ft,vol_20,vol,1310,-0.32184256541549483
+Communication Services,jkx_cnn_ft,vol_40,vol,1310,-0.4833621407697877
+Communication Services,jkx_cnn_ft,dd_5,dd,1310,0.49594284072957057
+Communication Services,jkx_cnn_ft,dd_10,dd,1310,0.46078431372549017
+Communication Services,jkx_cnn_ft,dd_20,dd,1310,0.47115750861155276
+Communication Services,jkx_cnn_ft,dd_40,dd,1310,0.45514501781303957
+Communication Services,resnet50_ft,dir_5,dir,1310,0.30997739890387555
+Communication Services,resnet50_ft,dir_10,dir,1310,0.330001516008211
+Communication Services,resnet50_ft,dir_20,dir,1310,0.35773285588395504
+Communication Services,resnet50_ft,dir_40,dir,1310,0.33650160858657346
+Communication Services,resnet50_ft,vol_5,vol,1310,-0.019674564833150887
+Communication Services,resnet50_ft,vol_10,vol,1310,-0.08680645546389343
+Communication Services,resnet50_ft,vol_20,vol,1310,-0.21680655108934066
+Communication Services,resnet50_ft,vol_40,vol,1310,-0.404132568660428
+Communication Services,resnet50_ft,dd_5,dd,1310,0.5467022116903634
+Communication Services,resnet50_ft,dd_10,dd,1310,0.49058563822880147
+Communication Services,resnet50_ft,dd_20,dd,1310,0.484279776099629
+Communication Services,resnet50_ft,dd_40,dd,1310,0.4744634231635084
+Communication Services,effnet_b0_ft,dir_5,dir,1310,0.20361439862779843
+Communication Services,effnet_b0_ft,dir_10,dir,1310,0.21664317132554586
+Communication Services,effnet_b0_ft,dir_20,dir,1310,0.3017835685032709
+Communication Services,effnet_b0_ft,dir_40,dir,1310,0.322031514429897
+Communication Services,effnet_b0_ft,vol_5,vol,1310,-0.051917570350360265
+Communication Services,effnet_b0_ft,vol_10,vol,1310,-0.08043475141540557
+Communication Services,effnet_b0_ft,vol_20,vol,1310,-0.12339509007775917
+Communication Services,effnet_b0_ft,vol_40,vol,1310,-0.28656546872773414
+Communication Services,effnet_b0_ft,dd_5,dd,1310,0.542671980468189
+Communication Services,effnet_b0_ft,dd_10,dd,1310,0.4680845020127256
+Communication Services,effnet_b0_ft,dd_20,dd,1310,0.46804617117117114
+Communication Services,effnet_b0_ft,dd_40,dd,1310,0.4760097698511573
+Communication Services,convnext_t_ft,dir_5,dir,1310,0.36938686489419004
+Communication Services,convnext_t_ft,dir_10,dir,1310,0.36970551416582226
+Communication Services,convnext_t_ft,dir_20,dir,1310,0.3776474735879733
+Communication Services,convnext_t_ft,dir_40,dir,1310,0.3591210543246935
+Communication Services,convnext_t_ft,vol_5,vol,1310,-0.11247527918172184
+Communication Services,convnext_t_ft,vol_10,vol,1310,-0.18063608943967147
+Communication Services,convnext_t_ft,vol_20,vol,1310,-0.32713422585004026
+Communication Services,convnext_t_ft,vol_40,vol,1310,-0.5221209660686539
+Communication Services,convnext_t_ft,dd_5,dd,1310,0.5769244578486284
+Communication Services,convnext_t_ft,dd_10,dd,1310,0.5578009349435138
+Communication Services,convnext_t_ft,dd_20,dd,1310,0.5256380001324854
+Communication Services,convnext_t_ft,dd_40,dd,1310,0.5127682884182458
+Communication Services,vit_b16_ft,dir_5,dir,1310,0.33906698756134607
+Communication Services,vit_b16_ft,dir_10,dir,1310,0.34183347299562045
+Communication Services,vit_b16_ft,dir_20,dir,1310,0.3517181029094963
+Communication Services,vit_b16_ft,dir_40,dir,1310,0.35911427130171036
+Communication Services,vit_b16_ft,vol_5,vol,1310,-0.035509288555312546
+Communication Services,vit_b16_ft,vol_10,vol,1310,-0.10532471138159827
+Communication Services,vit_b16_ft,vol_20,vol,1310,-0.21458978964531972
+Communication Services,vit_b16_ft,vol_40,vol,1310,-0.4162857958592323
+Communication Services,vit_b16_ft,dd_5,dd,1310,0.5208512853655034
+Communication Services,vit_b16_ft,dd_10,dd,1310,0.5217139007921049
+Communication Services,vit_b16_ft,dd_20,dd,1310,0.5029353802331743
+Communication Services,vit_b16_ft,dd_40,dd,1310,0.48669759360041964
+Communication Services,swin_t_ft,dir_5,dir,1310,0.3202955824832716
+Communication Services,swin_t_ft,dir_10,dir,1310,0.35327322206106776
+Communication Services,swin_t_ft,dir_20,dir,1310,0.39510159977120196
+Communication Services,swin_t_ft,dir_40,dir,1310,0.3952146529491325
+Communication Services,swin_t_ft,vol_5,vol,1310,-0.03804915494060457
+Communication Services,swin_t_ft,vol_10,vol,1310,-0.09265627865974269
+Communication Services,swin_t_ft,vol_20,vol,1310,-0.18871455207812704
+Communication Services,swin_t_ft,vol_40,vol,1310,-0.340556424583633
+Communication Services,swin_t_ft,dd_5,dd,1310,0.5117496050552922
+Communication Services,swin_t_ft,dd_10,dd,1310,0.5008521620568758
+Communication Services,swin_t_ft,dd_20,dd,1310,0.4945349761526232
+Communication Services,swin_t_ft,dd_40,dd,1310,0.4916412584967106
+Communication Services,yolov8_cls_ft,dir_5,dir,1310,0.27530683337611633
+Communication Services,yolov8_cls_ft,dir_10,dir,1310,0.26885201753467286
+Communication Services,yolov8_cls_ft,dir_20,dir,1310,0.2999467455441305
+Communication Services,yolov8_cls_ft,dir_40,dir,1310,0.3498720245688529
+Communication Services,yolov8_cls_ft,vol_5,vol,1310,-0.06758947133095661
+Communication Services,yolov8_cls_ft,vol_10,vol,1310,-0.1124107258551914
+Communication Services,yolov8_cls_ft,vol_20,vol,1310,-0.2015967749183465
+Communication Services,yolov8_cls_ft,vol_40,vol,1310,-0.3857755016368942
+Communication Services,yolov8_cls_ft,dd_5,dd,1310,0.43985171621427543
+Communication Services,yolov8_cls_ft,dd_10,dd,1310,0.44796536164134526
+Communication Services,yolov8_cls_ft,dd_20,dd,1310,0.45010474629040803
+Communication Services,yolov8_cls_ft,dd_40,dd,1310,0.4836827639717614

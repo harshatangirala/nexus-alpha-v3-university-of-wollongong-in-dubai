@@ -1,0 +1,88 @@
+# %% [markdown]
+## 19. Text on the decision panel (so CV, NLP and fusion are compared on identical rows)
+
+For each panel row (stock, decision close *t*), the **latest periodic report** (10-K or 10-Q) and the **latest 8-K** whose availability is before 16:00 New York on *t*; older than 90 / 20 sessions counts as "no filing". Age = sessions since the filing became tradeable.
+
+Two kinds of panel NLP model:
+* **Frozen panel probes** `<model>_panel_frozen`: linear models on the panel training rows using 32 principal components of the latest periodic filing's embedding, 32 of the latest 8-K's (zero if none), flags and log-ages. Embeddings carry no labels, so training rows are clean.
+* **Fine-tuned transfers** `<model>_panel_ft` (also TF-IDF): the event model's prediction for the most recent filing, used while the filing's own horizon is still open (age ≤ h), otherwise the training base rate. Only filings that are themselves outside the training block are used (their predictions are out-of-sample). Then calibrated on the inner block like every model.
+
+**Fresh-text rows** (a filing in the last 5 sessions) mimic the dashboard, where the user pastes a recent filing summary.
+
+# %%
+dec_utc = (pd.DatetimeIndex(P["date"]) + CLOSE_T).tz_localize(NY).tz_convert("UTC").tz_localize(None).values
+EV_AVAIL = np.array([FIL.at[i, "available_utc"].tz_convert("UTC").tz_localize(None).to_datetime64() for i in EV.fil_id], dtype="datetime64[ns]")
+IS_PER = EV.form.isin(["10-K", "10-Q"]).values
+LATEST = {"per": np.full(N, -1), "8k": np.full(N, -1)}; AGE = {"per": np.full(N, np.nan), "8k": np.full(N, np.nan)}
+for t in TICKERS:
+    pr_rows = np.flatnonzero((P.ticker == t).values)
+    for key, msk, lim in (("per", IS_PER, CFG["sec"]["lookback_sessions"]["periodic"]), ("8k", ~IS_PER, CFG["sec"]["lookback_sessions"]["8-K"])):
+        ev_i = np.flatnonzero((EV.ticker == t).values & msk)
+        if not len(ev_i):
+            continue
+        o = ev_i[np.argsort(EV_AVAIL[ev_i])]; av = EV_AVAIL[o]
+        k = np.searchsorted(av, dec_utc[pr_rows], side="right") - 1
+        ok = k >= 0
+        cand = np.where(ok, o[np.clip(k, 0, None)], -1)
+        age = np.where(ok, P["g"].values[pr_rows] - EV["g"].values[np.clip(cand, 0, None)], np.nan)
+        ok &= (age >= 0) & (age <= lim)
+        LATEST[key][pr_rows] = np.where(ok, cand, -1); AGE[key][pr_rows] = np.where(ok, age, np.nan)
+HAS_PER, HAS_8K = LATEST["per"] >= 0, LATEST["8k"] >= 0
+age_any = np.fmin(np.where(HAS_PER, AGE["per"], np.inf), np.where(HAS_8K, AGE["8k"], np.inf))
+FRESH = np.isfinite(age_any) & (age_any <= 5)
+COVER = pd.DataFrame([{"block": b, "rows": int(PANEL.mask[b].sum()), "has_periodic": float(HAS_PER[PANEL.mask[b]].mean()),
+                       "has_8k_20s": float(HAS_8K[PANEL.mask[b]].mean()), "fresh_text_5s": float(FRESH[PANEL.mask[b]].mean())} for b in BLOCK_ORDER])
+COVER.to_csv(SUB["tables"] / "panel_text_coverage.csv", index=False); display(COVER.round(3))
+# leakage check: every attached filing was available before the decision close
+for key in ("per", "8k"):
+    rr = np.flatnonzero(LATEST[key] >= 0)
+    assert (EV_AVAIL[LATEST[key][rr]] <= dec_utc[rr]).all(), f"a {key} filing is attached before it was available"
+print("Panel text attachment passed the availability check.")
+
+def panel_text_features(m):
+    Z = TEXT_PCA[m]; k = Z.shape[1]
+    Xp = np.where(HAS_PER[:, None], Z[np.clip(LATEST["per"], 0, None)], 0.0)
+    X8 = np.where(HAS_8K[:, None], Z[np.clip(LATEST["8k"], 0, None)], 0.0)
+    return np.hstack([Xp, X8, HAS_PER[:, None], HAS_8K[:, None], np.log1p(np.nan_to_num(AGE["per"], nan=99))[:, None],
+                      np.log1p(np.nan_to_num(AGE["8k"], nan=99))[:, None]]).astype(np.float32)
+NLP_PANEL_FROZEN = []
+for m in list(TEXT_PCA):
+    mid = f"{m}_panel_frozen"
+    try:
+        if not have_pred("panel", mid) or FORCE_RERUN:
+            finalize(PANEL, mid, fit_heads(PANEL, panel_text_features(m), TR, IN, "linear"), "nlp_panel_frozen", encoder=m,
+                     label=f"{LABEL_OF.get(m + '_frozen', m)} on the panel (frozen)")
+        NLP_PANEL_FROZEN.append(mid)
+    except Exception as e:
+        failed(mid, e)
+
+EV_BLOCK = EV["block"].values
+def panel_transfer(event_mid):
+    pe = load_pred("event", event_mid); raw = {}
+    usable = ~np.isin(EV_BLOCK, ["train", "train_purged", "pre_study"])
+    cand = np.where(HAS_8K & (~HAS_PER | (np.nan_to_num(AGE["8k"], nan=1e9) <= np.nan_to_num(AGE["per"], nan=1e9))), LATEST["8k"], LATEST["per"])
+    age = np.where(cand == LATEST["8k"], AGE["8k"], AGE["per"])
+    ok0 = (cand >= 0) & usable[np.clip(cand, 0, None)]
+    for t in TASKS:
+        h = int(t.split("_")[1]); ok = ok0 & (np.nan_to_num(age, nan=1e9) <= h)
+        pri = PANEL.prior[t]
+        if t.startswith("dir"):
+            a = np.tile(np.asarray(pri, float), (N, 1)); a[ok] = pe[t][cand[ok]]
+        else:
+            a = np.full(N, float(pri)); a[ok] = pe[t][cand[ok]]
+        raw[t] = a
+    return raw_from_probs(raw)
+NLP_PANEL_FT = []
+for em in [m for m in NLP_MAIN if REG.get(m, {}).get("status") == "RUN"]:
+    mid = em.replace("_ft", "").replace("_frozen", "").replace("_lr", "") + ("_panel_ft" if em.endswith("_ft") or em == "fingpt_qlora" else "_panel_transfer")
+    try:
+        finalize(PANEL, mid, panel_transfer(em), "nlp_panel_transfer", event_model=em, label=f"{LABEL_OF.get(em, em)} carried to the panel")
+        NLP_PANEL_FT.append(mid)
+    except Exception as e:
+        failed(mid, e)
+NLP_PANEL_ALL = NLP_PANEL_FROZEN + NLP_PANEL_FT
+LB_NLPP_VAL = leaderboard(PANEL, NLP_PANEL_ALL, PANEL.mask["val"]); LB_NLPP_VAL.to_csv(SUB["tables"] / "nlp_panel_leaderboard_val.csv", index=False)
+PIV_NLPP = LB_NLPP_VAL[LB_NLPP_VAL.status == "RUN"].pivot_table(index="model", columns="task", values="primary")
+display(PIV_NLPP.round(3))
+NLPP_RANK = mean_rank(LB_NLPP_VAL)
+tick("19 panel text")

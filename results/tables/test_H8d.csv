@@ -1,0 +1,13 @@
+family,task,A,B,n,delta,lo,hi,p,p_holm,supported,verdict
+H8d technical + filing calendar vs technical alone,dir_5,fusion_tech_cal,tech_gbm,6550,0.0,0.0,0.0,1.0,1.0,False,no clear difference
+H8d technical + filing calendar vs technical alone,dir_10,fusion_tech_cal,tech_gbm,6550,0.021098493750720648,0.009355748189371392,0.031073674058179863,0.001998001998001998,0.023976023976023976,True,better
+H8d technical + filing calendar vs technical alone,dir_20,fusion_tech_cal,tech_gbm,6550,0.0246279856243502,0.01509251497895144,0.03399281095774174,0.001998001998001998,0.023976023976023976,True,better
+H8d technical + filing calendar vs technical alone,dir_40,fusion_tech_cal,tech_gbm,6550,-0.0011180909442392584,-0.011910789526009623,0.00958669381205353,0.8291708291708292,1.0,False,no clear difference
+H8d technical + filing calendar vs technical alone,vol_5,fusion_tech_cal,tech_gbm,6550,0.0614386501458104,0.042950790567421106,0.08241876910294918,0.001998001998001998,0.023976023976023976,True,better
+H8d technical + filing calendar vs technical alone,vol_10,fusion_tech_cal,tech_gbm,6550,0.0748172961552489,0.04656144464894852,0.10527546124526681,0.001998001998001998,0.023976023976023976,True,better
+H8d technical + filing calendar vs technical alone,vol_20,fusion_tech_cal,tech_gbm,6550,0.07627004293536066,0.04602844806455691,0.11176821056281644,0.001998001998001998,0.023976023976023976,True,better
+H8d technical + filing calendar vs technical alone,vol_40,fusion_tech_cal,tech_gbm,6550,0.037948988146429885,0.023742427489671914,0.0527461803953896,0.001998001998001998,0.023976023976023976,True,better
+H8d technical + filing calendar vs technical alone,dd_5,fusion_tech_cal,tech_gbm,6550,0.026452882295794233,0.0029120575402018624,0.058688112431335475,0.029970029970029972,0.14985014985014986,False,no clear difference
+H8d technical + filing calendar vs technical alone,dd_10,fusion_tech_cal,tech_gbm,6550,0.028470421192901774,0.006711778817046821,0.04984865822005971,0.011988011988011988,0.07192807192807193,False,no clear difference
+H8d technical + filing calendar vs technical alone,dd_20,fusion_tech_cal,tech_gbm,6550,0.018369177969567496,-0.0018947766444325853,0.04029804012832116,0.10589410589410589,0.42357642357642356,False,no clear difference
+H8d technical + filing calendar vs technical alone,dd_40,fusion_tech_cal,tech_gbm,6550,-0.0013676583177091306,-0.017425802378881416,0.012825923415416812,0.7912087912087912,1.0,False,no clear difference

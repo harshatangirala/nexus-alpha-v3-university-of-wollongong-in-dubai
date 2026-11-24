@@ -1,0 +1,13 @@
+question,task,CV,NLP (filings),NLP (panel),fusion vs best single
+Q1,dir_5,"convnext_t_ft: skill +0.032 [+0.019, +0.043] *","deberta_l_ft: skill +0.003 [-0.019, +0.025]","roberta_l_panel_frozen: skill +0.001 [-0.010, +0.013]","+0.0000 [+0.0000, +0.0000]"
+Q1,vol_5,"swin_t_ft: skill +0.084 [+0.032, +0.122] *","finbert_ft: skill -0.023 [-0.087, +0.024]","deberta_l_panel_frozen: skill -0.064 [-0.166, +0.009]","+0.0640 [+0.0406, +0.0903]"
+Q1,dd_5,"swin_t_ft: skill +0.105 [+0.059, +0.164] *","longformer_ft: skill +0.151 [+0.062, +0.236] *","deberta_l_panel_frozen: skill +0.084 [+0.036, +0.131] *","+0.0532 [+0.0312, +0.0841]"
+Q1,dir_10,"convnext_t_ft: skill +0.030 [+0.015, +0.046] *","secbert_ft: skill +0.001 [-0.035, +0.041]","longformer_panel_frozen: skill +0.006 [-0.007, +0.019]","+0.0000 [+0.0000, +0.0000]"
+Q1,vol_10,"vit_b16_ft: skill +0.032 [-0.046, +0.089]","finbert_ft: skill -0.040 [-0.110, +0.014]","deberta_l_panel_frozen: skill -0.094 [-0.210, -0.007]","+0.0528 [+0.0319, +0.0764]"
+Q1,dd_10,"resnet50_ft: skill +0.086 [+0.054, +0.126] *","longformer_ft: skill +0.112 [+0.035, +0.191] *","roberta_l_panel_frozen: skill +0.097 [+0.058, +0.137] *","+0.0034 [-0.0125, +0.0225]"
+Q1,dir_20,"convnext_t_ft: skill +0.027 [+0.006, +0.047]","secbert_ft: skill +0.003 [-0.051, +0.046]","secbert_panel_ft: skill +0.005 [-0.036, +0.040]","-0.0068 [-0.0234, +0.0100]"
+Q1,vol_20,"vit_b16_ft: skill -0.029 [-0.135, +0.051]","finbert_ft: skill -0.021 [-0.090, +0.030]","deberta_l_panel_frozen: skill -0.113 [-0.255, -0.007]","+0.1589 [+0.1017, +0.2154]"
+Q1,dd_20,"effnet_b0_ft: skill -0.000 [-0.033, +0.033]","longformer_ft: skill +0.139 [+0.061, +0.212] *","longformer_panel_frozen: skill +0.075 [+0.048, +0.099] *","+0.0135 [+0.0023, +0.0249]"
+Q1,dir_40,"effnet_b0_ft: skill +0.012 [-0.006, +0.030]","fingpt_frozen: skill +0.005 [-0.014, +0.019]","deberta_l_panel_ft: skill +0.015 [-0.007, +0.035]","+0.0000 [+0.0000, +0.0000]"
+Q1,vol_40,"yolov8_cls_ft: skill -0.182 [-0.339, -0.072]","finbert_ft: skill -0.022 [-0.125, +0.033]","deberta_l_panel_frozen: skill -0.158 [-0.325, -0.027]","+0.1111 [+0.0754, +0.1496]"
+Q1,dd_40,"vit_b16_ft: skill +0.040 [+0.014, +0.067] *","longformer_ft: skill +0.128 [+0.057, +0.190] *","longformer_panel_frozen: skill +0.044 [+0.019, +0.066] *","+0.0423 [+0.0262, +0.0583]"

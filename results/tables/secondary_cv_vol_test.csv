@@ -1,0 +1,21 @@
+role,model,task,r2,qlike,spearman,mae
+uninformed prior,prior,vol_5,-0.0693,0.9553,,0.3558
+numbers-only baseline,tech_gbm,vol_5,0.371,0.4796,0.6127,0.2666
+label-shuffle control,resnet50_frozen_shuffled,vol_5,-0.0607,0.9421,0.1049,0.3546
+best CV model (validation),swin_t_ft,vol_5,0.0836,0.7411,0.2913,0.3328
+top-3 CV ensemble,cv_top3,vol_5,0.1324,0.6978,0.3572,0.3238
+uninformed prior,prior,vol_10,-0.0991,0.7849,,0.336
+numbers-only baseline,tech_gbm,vol_10,0.3518,0.3884,0.6005,0.2532
+label-shuffle control,resnet50_frozen_shuffled,vol_10,-0.088,0.7707,0.1011,0.335
+best CV model (validation),vit_b16_ft,vol_10,0.0325,0.6427,0.315,0.3187
+top-3 CV ensemble,cv_top3,vol_10,0.0617,0.624,0.3264,0.312
+uninformed prior,prior,vol_20,-0.1348,0.6385,,0.3157
+numbers-only baseline,tech_gbm,vol_20,0.3143,0.3252,0.5804,0.2467
+label-shuffle control,resnet50_frozen_shuffled,vol_20,-0.1301,0.6336,0.0914,0.3152
+best CV model (validation),vit_b16_ft,vol_20,-0.0288,0.5422,0.2881,0.305
+top-3 CV ensemble,cv_top3,vol_20,0.0097,0.5166,0.3226,0.2994
+uninformed prior,prior,vol_40,-0.1861,0.5305,,0.2961
+numbers-only baseline,tech_gbm,vol_40,0.2922,0.2638,0.5796,0.2335
+label-shuffle control,resnet50_frozen_shuffled,vol_40,-0.1875,0.5319,-0.06,0.2962
+best CV model (validation),yolov8_cls_ft,vol_40,-0.1823,0.5229,0.1561,0.2984
+top-3 CV ensemble,cv_top3,vol_40,-0.1119,0.4635,0.2475,0.294

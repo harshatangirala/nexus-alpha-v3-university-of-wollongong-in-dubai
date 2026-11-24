@@ -1,0 +1,8 @@
+model,params_m,gflops_per_row_3_views,latency_ms_batch1_fp32,rows_per_s_batch64_bf16,train_minutes,checkpoint_mb,val_mean_rank
+jkx_cnn_ft,3.39,10.22,0.3,7140.9,1.57,13.6,5.33
+resnet50_ft,26.68,24.53,2.1,1732.7,4.92,107.0,3.75
+effnet_b0_ft,5.99,2.31,2.3,1044.0,5.52,24.3,4.58
+convnext_t_ft,29.02,26.73,2.2,115.8,3.88,116.1,4.33
+vit_b16_ft,86.99,105.38,4.1,1744.1,5.36,348.0,2.17
+swin_t_ft,28.71,26.94,3.0,1568.7,4.92,114.9,2.75
+yolov8_cls_ft,7.07,4.58,1.0,6644.5,2.05,28.4,5.08

@@ -1,0 +1,335 @@
+# %% [markdown]
+## 7. Evaluation toolkit (metrics, uncertainty, calibration, prediction store)
+
+**Metrics matched to each task.**
+* **Direction (3 classes):** macro-F1 (primary: every class counts equally, so predicting only "UP" in a rising market scores badly), accuracy, balanced accuracy, log loss and multi-class Brier score (probability quality), ROC-AUC of UP-vs-rest and DOWN-vs-rest, confusion matrix. Skill = macro-F1 minus the **within-month shuffled-prediction null** (same predictions, labels permuted inside each month; keeps the class mix, removes any link to the future).
+* **Volatility (log annualised realised volatility):** R² (primary), Spearman correlation, QLIKE (Patton 2011: the robust loss for volatility forecasts), MAE.
+* **Drawdown > 10 %:** ROC-AUC (primary: ranking quality, insensitive to the rare base rate), PR-AUC (average precision: what matters when positives are rare), Brier skill score against the training base rate, expected calibration error (ECE, 10 bins).
+
+**Uncertainty.** Rows are resampled in **calendar-month blocks** (all stocks of a month together), because returns of different stocks in the same month are correlated; B = 1000 (200 in QUICK). Model-vs-model comparisons are **paired** (same resampled rows for both). p-values: share of bootstrap differences on the wrong side of zero, doubled. Families of tests use **Holm**.
+
+**Calibration.** Every model's raw outputs are calibrated on the **inner block (2021)** only: temperature scaling for direction (Guo et al. 2017), Platt scaling for drawdown, a linear map for volatility. Validation and test never touch a calibrator's fit.
+
+# %%
+from scipy.stats import rankdata, spearmanr
+from scipy.optimize import minimize_scalar
+
+def auc_np(y, s):
+    y = np.asarray(y).astype(bool); n1 = int(y.sum()); n0 = len(y) - n1
+    if n1 == 0 or n0 == 0:
+        return np.nan
+    r = rankdata(s)
+    return float((r[y].sum() - n1 * (n1 + 1) / 2) / (n1 * n0))
+
+def ap_np(y, s):
+    y = np.asarray(y).astype(bool)
+    if y.sum() == 0:
+        return np.nan
+    o = np.argsort(-np.asarray(s), kind="stable"); yy = y[o]
+    tp = np.cumsum(yy); prec = tp / np.arange(1, len(yy) + 1)
+    return float(prec[yy].sum() / yy.sum())
+
+def ece_np(y, p, bins=10):
+    y, p = np.asarray(y, float), np.asarray(p, float)
+    e = np.linspace(0, 1, bins + 1); k = np.clip(np.digitize(p, e[1:-1]), 0, bins - 1); out = 0.0
+    for b in range(bins):
+        m = k == b
+        if m.any():
+            out += m.mean() * abs(y[m].mean() - p[m].mean())
+    return float(out)
+
+def dir_metrics(y, p):
+    y = np.asarray(y).astype(int); p = np.asarray(p, float); n = len(y)
+    if n == 0:
+        return {}
+    yh = p.argmax(1)
+    cm = np.zeros((3, 3)); np.add.at(cm, (y, yh), 1)
+    tp = np.diag(cm); prec = np.divide(tp, cm.sum(0), out=np.zeros(3), where=cm.sum(0) > 0)
+    rec = np.divide(tp, cm.sum(1), out=np.zeros(3), where=cm.sum(1) > 0)
+    f1 = np.divide(2 * prec * rec, prec + rec, out=np.zeros(3), where=(prec + rec) > 0)
+    oh = np.eye(3)[y]
+    return {"macro_f1": float(f1.mean()), "accuracy": float(tp.sum() / n), "balanced_acc": float(rec.mean()),
+            "log_loss": float(-np.mean(np.log(np.clip(p[np.arange(n), y], 1e-9, 1)))),
+            "brier": float(np.mean(((p - oh) ** 2).sum(1))), "auc_up": auc_np(y == 2, p[:, 2]), "auc_down": auc_np(y == 0, p[:, 0]),
+            "f1_down": float(f1[0]), "f1_side": float(f1[1]), "f1_up": float(f1[2]), "n": n}
+
+def vol_metrics(y, p):
+    y, p = np.asarray(y, float), np.asarray(p, float)
+    if len(y) < 3:
+        return {}
+    e = y - p
+    return {"r2": float(1 - (e ** 2).sum() / max(((y - y.mean()) ** 2).sum(), 1e-12)), "spearman": float(spearmanr(y, p)[0]),
+            "qlike": float(np.mean(np.exp(2 * e) - 2 * e - 1)), "mae": float(np.abs(e).mean()), "n": len(y)}
+
+def dd_metrics(y, p, prior):
+    y, p = np.asarray(y, float), np.asarray(p, float)
+    if len(y) == 0:
+        return {}
+    b = float(np.mean((p - y) ** 2)); b0 = float(np.mean((prior - y) ** 2))
+    return {"auc": auc_np(y, p), "pr_auc": ap_np(y, p), "brier": b, "bss": float(1 - b / b0) if b0 > 0 else np.nan,
+            "ece": ece_np(y, p), "base_rate": float(y.mean()), "n": len(y)}
+
+def primary_value(task, y, p):
+    kind = task.split("_")[0]
+    y = np.asarray(y)
+    if len(y) == 0:
+        return np.nan
+    if kind == "dir":                   # fast path (called thousands of times by the bootstrap): macro-F1 from a 3x3 confusion count
+        yi = y.astype(int); yh = np.asarray(p, float).argmax(1)
+        cm = np.bincount(yi * 3 + yh, minlength=9).reshape(3, 3).astype(float)
+        tp = np.diag(cm); cs, rs = cm.sum(0), cm.sum(1)
+        prec = np.divide(tp, cs, out=np.zeros(3), where=cs > 0); rec = np.divide(tp, rs, out=np.zeros(3), where=rs > 0)
+        return float(np.divide(2 * prec * rec, prec + rec, out=np.zeros(3), where=(prec + rec) > 0).mean())
+    if kind == "vol":
+        e = np.asarray(y, float) - np.asarray(p, float); yy = np.asarray(y, float)
+        return float(1 - (e ** 2).sum() / max(((yy - yy.mean()) ** 2).sum(), 1e-12))
+    return auc_np(y, p)
+
+# %%
+class EvalCtx:
+    """Labels, months, blocks and sectors of one evaluation table (the panel, or the filing events).
+    Test labels are NaN until the vault is opened in section 23."""
+    def __init__(self, name, labels, months, blocks, sectors, tickers):
+        self.name, self.Y = name, labels
+        self.months, self.blocks = np.asarray(months), np.asarray(blocks)
+        self.sectors, self.tickers = np.asarray(sectors), np.asarray(tickers)
+        self.n = len(self.months)
+        self.mask = {b: self.blocks == b for b in BLOCK_ORDER}
+        self.prior = {}
+    def fit_priors(self, fit_mask):
+        for h in HORIZONS:
+            y = self.Y[f"dir_{h}"][fit_mask]; y = y[np.isfinite(y)].astype(int)
+            self.prior[f"dir_{h}"] = np.bincount(y, minlength=3) / max(1, len(y))
+            self.prior[f"dd_{h}"] = float(np.nanmean(self.Y[f"dd_{h}"][fit_mask]))
+            self.prior[f"vol_{h}"] = float(np.nanmean(self.Y[f"vol_{h}"][fit_mask]))
+    def rows(self, task, mask, pred=None):
+        """Row indices inside mask with a finite label (and a finite prediction, if given)."""
+        y = self.Y[task]; m = mask & np.isfinite(y)
+        if pred is not None:
+            pr = np.asarray(pred)
+            m &= np.isfinite(pr).all(1) if pr.ndim == 2 else np.isfinite(pr)
+        return np.flatnonzero(m)
+
+def metrics_for(ctx, task, pred, mask):
+    r = ctx.rows(task, mask, pred)
+    y, p = ctx.Y[task][r], np.asarray(pred)[r]
+    kind = task.split("_")[0]
+    if kind == "dir":
+        return dir_metrics(y, p)
+    if kind == "vol":
+        return vol_metrics(y, p)
+    return dd_metrics(y, p, ctx.prior.get(task, float(np.nanmean(y)) if len(y) else 0.0))
+
+def month_groups(months_sub):
+    u, inv = np.unique(months_sub, return_inverse=True)
+    return [np.flatnonzero(inv == k) for k in range(len(u))]
+
+BOOT = {"B": None}       # Phase A (section 23A) raises the number of bootstrap draws for the many-test ablation families, then resets this to None
+
+def bootstrap(fn, groups, B=None, seed=0):
+    """Month-block bootstrap of fn(row_positions); returns an array of B statistics."""
+    B = B or BOOT["B"] or CFG["bootstrap_B"]; rng = np.random.default_rng(seed); out = np.empty(B)
+    G = len(groups)
+    for b in range(B):
+        pick = rng.integers(0, G, G)
+        out[b] = fn(np.concatenate([groups[g] for g in pick]))
+    return out
+
+def dir_null_f1(y, p, months, n_perm=20, seed=0):
+    """Mean macro-F1 when labels are shuffled within months (keeps class shares, breaks the link to the future)."""
+    rng = np.random.default_rng(seed); groups = month_groups(months); vals = []
+    for _ in range(n_perm):
+        ys = y.copy()
+        for g in groups:
+            ys[g] = ys[g][rng.permutation(len(g))]
+        vals.append(primary_value("dir_0", ys, p))
+    return float(np.mean(vals))
+
+def skill_test(ctx, task, pred, mask, seed=0):
+    """Point estimate, 95 % CI and one-sided p of skill: macro-F1 - shuffled null / R^2 - 0 / AUC - 0.5."""
+    r = ctx.rows(task, mask, pred)
+    if len(r) < 30:
+        return {"n": len(r), "skill": np.nan, "lo": np.nan, "hi": np.nan, "p": np.nan}
+    y, p, mo = ctx.Y[task][r], np.asarray(pred)[r], ctx.months[r]
+    kind = task.split("_")[0]
+    null = dir_null_f1(y.astype(int), p, mo, seed=seed) if kind == "dir" else (0.0 if kind == "vol" else 0.5)
+    fn = lambda ix: primary_value(task, y[ix], p[ix]) - null
+    bs = bootstrap(fn, month_groups(mo), seed=seed)
+    est = fn(np.arange(len(r)))
+    return {"n": len(r), "null": null, "skill": float(est), "lo": float(np.nanpercentile(bs, 2.5)), "hi": float(np.nanpercentile(bs, 97.5)),
+            "p": float((1 + np.sum(bs <= 0)) / (1 + np.isfinite(bs).sum()))}
+
+def paired_delta(ctx, task, pa, pb, mask, seed=0):
+    """Delta of the primary metric (A - B) on rows where both predict; 95 % CI and two-sided p (paired month bootstrap)."""
+    pa, pb = np.asarray(pa), np.asarray(pb)
+    r = np.intersect1d(ctx.rows(task, mask, pa), ctx.rows(task, mask, pb))
+    if len(r) < 30:
+        return {"n": len(r), "delta": np.nan, "lo": np.nan, "hi": np.nan, "p": np.nan}
+    y = ctx.Y[task][r]; A, Bp = pa[r], pb[r]
+    fn = lambda ix: primary_value(task, y[ix], A[ix]) - primary_value(task, y[ix], Bp[ix])
+    bs = bootstrap(fn, month_groups(ctx.months[r]), seed=seed)
+    est = fn(np.arange(len(r)))
+    p2 = 2 * min((1 + np.sum(bs <= 0)) / (1 + len(bs)), (1 + np.sum(bs >= 0)) / (1 + len(bs)))
+    return {"n": len(r), "delta": float(est), "lo": float(np.nanpercentile(bs, 2.5)), "hi": float(np.nanpercentile(bs, 97.5)), "p": float(min(1.0, p2))}
+
+def best_rows(df, keys, col="primary"):
+    """Row with the highest `col` per group of `keys`; groups with no valid value are skipped (small QUICK-mode groups)."""
+    d = df.dropna(subset=[col])
+    return d.loc[d.groupby(keys)[col].idxmax()] if len(d) else d
+
+def holm(pvals):
+    p = np.asarray(pvals, float); out = np.full(len(p), np.nan); ok = np.isfinite(p)
+    idx = np.flatnonzero(ok); o = idx[np.argsort(p[idx])]; m = len(o); run = 0.0
+    for k, i in enumerate(o):
+        run = max(run, min(1.0, (m - k) * p[i])); out[i] = run
+    return out
+
+# %%
+# ---------------------------------------------------------------- calibration (fit on the inner block only)
+def calibrate_fit(ctx, raw, fit_mask):
+    cal = {}
+    for h in HORIZONS:
+        t = f"dir_{h}"; r = ctx.rows(t, fit_mask, raw[t])
+        if len(r) >= 50:
+            z = np.asarray(raw[t], float)[r]; y = ctx.Y[t][r].astype(int)
+            nll = lambda T: -np.mean(np.log(np.clip(softmax_np(z / T)[np.arange(len(y)), y], 1e-9, 1)))
+            cal[f"T_{h}"] = float(minimize_scalar(nll, bounds=(0.05, 20), method="bounded").x)
+        t = f"vol_{h}"; r = ctx.rows(t, fit_mask, raw[t])
+        if len(r) >= 50:
+            x = np.asarray(raw[t], float)[r]; y = ctx.Y[t][r]
+            b = float(np.cov(x, y)[0, 1] / max(np.var(x, ddof=1), 1e-12)); a = float(y.mean() - b * x.mean())
+            cal[f"vol_ab_{h}"] = (a, b)
+        t = f"dd_{h}"; r = ctx.rows(t, fit_mask, raw[t])
+        if len(r) >= 50 and 0 < ctx.Y[t][r].sum() < len(r):
+            x = np.asarray(raw[t], float)[r].reshape(-1, 1)
+            lr_ = LogisticRegression(C=100.0).fit(x, ctx.Y[t][r].astype(int))
+            cal[f"dd_ab_{h}"] = (float(lr_.intercept_[0]), float(lr_.coef_[0, 0]))
+    return cal
+
+# ---------------------------------------------------------------- prediction store
+PRED = {"panel": {}, "event": {}}
+RAW = {"panel": {}, "event": {}}
+CALS = {"panel": {}, "event": {}}
+def _pred_path(ctxname, mid):
+    (SUB["preds"] / ctxname).mkdir(exist_ok=True); return SUB["preds"] / ctxname / f"{mid}.npz"
+def save_pred(ctxname, mid, pred, raw, cal):
+    np.savez_compressed(_pred_path(ctxname, mid), **{f"p__{k}": v for k, v in pred.items()}, **{f"r__{k}": v for k, v in raw.items()})
+    (SUB["preds"] / ctxname / f"{mid}.cal.json").write_text(json.dumps(cal))
+    PRED[ctxname][mid], RAW[ctxname][mid], CALS[ctxname][mid] = pred, raw, cal
+def load_pred(ctxname, mid):
+    if mid in PRED[ctxname]:
+        return PRED[ctxname][mid]
+    p_ = _pred_path(ctxname, mid)
+    if not p_.exists():
+        return None
+    z = np.load(p_)
+    expected = N if ctxname == "panel" else (len(EV) if "EV" in globals() else None)
+    sizes = {len(z[k]) for k in z.files}
+    if expected is not None and sizes != {expected}:
+        print(f"[{ctxname}/{mid}] saved predictions have {sorted(sizes)} rows, this run has {expected}: stale, recomputing")
+        return None
+    PRED[ctxname][mid] = {k[3:]: z[k] for k in z.files if k.startswith("p__")}
+    RAW[ctxname][mid] = {k[3:]: z[k] for k in z.files if k.startswith("r__")}
+    cp = SUB["preds"] / ctxname / f"{mid}.cal.json"
+    CALS[ctxname][mid] = json.loads(cp.read_text()) if cp.exists() else {}
+    return PRED[ctxname][mid]
+def have_pred(ctxname, mid):
+    return load_pred(ctxname, mid) is not None and REG.get(mid, {}).get("status") == "RUN"
+
+def summarize(ctx, pred, mask):
+    return {t: metrics_for(ctx, t, pred[t], mask) for t in TASKS if t in pred}
+
+def finalize(ctx, mid, raw, family, **meta):
+    """Calibrate on inner, store, and register inner/validation metrics (test is scored only in section 23)."""
+    cal = calibrate_fit(ctx, raw, ctx.mask["inner"])
+    pred = apply_calibration(raw, cal)
+    save_pred(ctx.name, mid, pred, raw, cal)
+    mv = summarize(ctx, pred, ctx.mask["val"])
+    register(mid, status="RUN", family=family, ctx=ctx.name,
+             val_primary={t: (mv[t].get(PRIMARY[t.split('_')[0]]) if mv.get(t) else None) for t in TASKS}, **meta)
+    return pred
+
+def leaderboard(ctx, mids, mask, primary_only=False):
+    rows = []
+    for mid in mids:
+        pr = load_pred(ctx.name, mid)
+        if pr is None or REG.get(mid, {}).get("status") != "RUN":
+            rows.append({"model": mid, "status": REG.get(mid, {}).get("status", "NOT_RUN")}); continue
+        for t in TASKS:
+            m = metrics_for(ctx, t, pr[t], mask)
+            if not m:
+                continue
+            row = {"model": mid, "status": "RUN", "task": t, "target": t.split("_")[0], "horizon": int(t.split("_")[1]),
+                   "primary": m.get(PRIMARY[t.split("_")[0]])}
+            if not primary_only:
+                row.update(m)
+            rows.append(row)
+    return pd.DataFrame(rows, columns=None) if rows else pd.DataFrame(columns=["model", "status", "task", "target", "horizon", "primary"])
+
+def mean_rank(lb):
+    """Mean rank over the 12 tasks (1 = best) from a leaderboard with columns model, task, primary."""
+    ok = lb[lb.status == "RUN"].dropna(subset=["primary"])
+    if ok.empty:
+        return pd.Series(dtype=float)
+    r = ok.pivot_table(index="model", columns="task", values="primary").rank(ascending=False)
+    return r.mean(1).sort_values()
+
+# %%
+# ---------------------------------------------------------------- generic heads on features (linear or LightGBM)
+GBM = dict(learning_rate=0.03, n_estimators=2000, num_leaves=15, min_child_samples=200, feature_fraction=0.8,
+           bagging_fraction=0.8, bagging_freq=1, lambda_l2=1.0, verbose=-1, n_jobs=8)
+def fit_heads(ctx, X, fit_mask, sel_mask, kind="linear", seed=0, tasks=None):
+    """One model per task on fit_mask rows; the regularisation is chosen on sel_mask (inner) by loss.
+    Returns raw outputs for all rows: direction log-probabilities, volatility predictions, drawdown logits."""
+    rng = np.random.default_rng(seed); raw = {}
+    X = np.asarray(X, dtype=np.float32)
+    okX = np.isfinite(X).all(1) if kind == "linear" else np.ones(len(X), bool)
+    tasks = tasks or TASKS
+    for t in tasks:
+        kd = t.split("_")[0]
+        fr = np.intersect1d(ctx.rows(t, fit_mask), np.flatnonzero(okX))
+        if len(fr) > CFG["probe"]["max_fit_rows"]:
+            fr = np.sort(rng.choice(fr, CFG["probe"]["max_fit_rows"], replace=False))
+        sr = np.intersect1d(ctx.rows(t, sel_mask), np.flatnonzero(okX))
+        y_f, y_s = ctx.Y[t][fr], ctx.Y[t][sr]
+        out = np.full((len(X), 3) if kd == "dir" else len(X), np.nan)
+        if len(fr) < 100 or len(sr) < 30 or (kd != "vol" and len(np.unique(y_f)) < (3 if kd == "dir" else 2)):
+            raw[t] = out; continue            # too few rows or a missing class: the task is left empty (shows as '-' / Not Run)
+        if kind == "linear":
+            sc = StandardScaler().fit(X[fr]); Xf, Xs, Xa = sc.transform(X[fr]), sc.transform(X[sr]), sc.transform(np.nan_to_num(X))
+            best, best_loss = None, np.inf
+            for c in (CFG["probe"]["alpha_grid"] if kd == "vol" else CFG["probe"]["C_grid"]):
+                if kd == "vol":
+                    m = Ridge(alpha=c).fit(Xf, y_f); loss = float(np.mean((m.predict(Xs) - y_s) ** 2))
+                else:
+                    m = LogisticRegression(C=c, max_iter=2000).fit(Xf, y_f.astype(int))
+                    ps = np.clip(m.predict_proba(Xs), 1e-9, 1)
+                    yi = y_s.astype(int) if kd == "dir" else y_s.astype(int)
+                    loss = float(-np.mean(np.log(ps[np.arange(len(yi)), yi])))
+                if loss < best_loss:
+                    best, best_loss = m, loss
+            if kd == "vol":
+                out = best.predict(Xa)
+            elif kd == "dir":
+                out = np.log(np.clip(best.predict_proba(Xa), 1e-9, 1))
+            else:
+                pp = np.clip(best.predict_proba(Xa)[:, 1], 1e-6, 1 - 1e-6); out = np.log(pp / (1 - pp))
+            out = np.where(okX[:, None], out, np.nan) if out.ndim == 2 else np.where(okX, out, np.nan)
+        else:
+            cb = [lgb.early_stopping(100, verbose=False)]
+            if kd == "vol":
+                m = lgb.LGBMRegressor(**GBM, random_state=seed).fit(X[fr], y_f, eval_set=[(X[sr], y_s)], callbacks=cb)
+                out = m.predict(X)
+            elif kd == "dir":
+                m = lgb.LGBMClassifier(**GBM, objective="multiclass", random_state=seed).fit(X[fr], y_f.astype(int), eval_set=[(X[sr], y_s.astype(int))], callbacks=cb)
+                out = np.log(np.clip(m.predict_proba(X), 1e-9, 1))
+            else:
+                m = lgb.LGBMClassifier(**GBM, random_state=seed).fit(X[fr], y_f.astype(int), eval_set=[(X[sr], y_s.astype(int))], callbacks=cb)
+                pp = np.clip(m.predict_proba(X)[:, 1], 1e-6, 1 - 1e-6); out = np.log(pp / (1 - pp))
+        raw[t] = out
+    return raw
+
+PANEL = EvalCtx("panel", Y, P["month"].values, P["block"].values, P["sector"].values, P["ticker"].values)
+PANEL.fit_priors(TR)
+print("Panel priors (train):", {k: (np.round(v, 3).tolist() if isinstance(v, np.ndarray) else round(v, 3)) for k, v in PANEL.prior.items() if k.startswith(("dir_20", "dd_20"))})
+tick("7 eval")

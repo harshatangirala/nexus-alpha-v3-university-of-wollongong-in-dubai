@@ -1,0 +1,22 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+streamlit==1.67.0
+plotly>=5.20
+pandas
+numpy
+pillow
+requests
+scipy
+scikit-learn==1.6.1
+joblib
+torch
+torchvision
+timm>=1.0.15
+transformers>=4.48
+huggingface_hub
+accelerate
+sentencepiece
+tokenizers
+safetensors
+ultralytics
+rapidocr-onnxruntime
+yfinance

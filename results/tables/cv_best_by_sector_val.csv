@@ -1,0 +1,6 @@
+sector,dd,dir,vol
+Communication Services,resnet50_ft,convnext_t_ft,yolov8_cls_ft
+Consumer Discretionary,swin_t_ft,convnext_t_ft,swin_t_ft
+Financials,convnext_t_ft,vit_b16_ft,vit_b16_ft
+Health Care,vit_b16_ft,convnext_t_ft,jkx_cnn_ft
+Information Technology,swin_t_ft,convnext_t_ft,vit_b16_ft

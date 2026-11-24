@@ -1,0 +1,2 @@
+scale,nu,coverage80,coverage90,brier_dd_mc,brier_dd_head,n
+1.25,normal,0.826,0.908,0.13332623737500002,0.13905057734887766,2000

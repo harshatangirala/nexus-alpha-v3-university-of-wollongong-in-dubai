@@ -1,0 +1,64 @@
+# %% [markdown]
+## 5. Technical-indicator features (reference model only)
+
+The CV models see **only images** and the NLP models **only text**. A gradient-boosting model on 20 classic indicators is reported as a **reference** ("what simple numbers already achieve"), because earlier work on this data found numbers hard to beat. It is never used to select CV or NLP models. All features use bars up to the decision close; the test below recomputes them on data **truncated at t** and requires identical values.
+
+# %%
+def wilder(x: np.ndarray, n: int) -> np.ndarray:
+    out = np.full(len(x), np.nan); s = np.nan
+    for i, v in enumerate(x):
+        if not np.isfinite(v):
+            continue
+        s = v if not np.isfinite(s) else s + (v - s) / n
+        out[i] = s
+    return out
+
+def tech_frame(d: pd.DataFrame, hb: pd.DataFrame, spy: pd.DataFrame) -> pd.DataFrame:
+    c, o, hi, lo, v = (d[k].values.astype(float) for k in ("close", "open", "high", "low", "volume"))
+    lc = np.log(c); lr = np.r_[np.nan, np.diff(lc)]
+    s = pd.Series
+    f = {}
+    for k in (1, 5, 20, 60, 120):
+        f[f"ret_{k}d"] = lc - np.r_[np.full(k, np.nan), lc[:-k]]
+    for k in (5, 20, 60):
+        f[f"lrv_{k}d"] = np.log(s(lr).rolling(k, min_periods=k).std().values * np.sqrt(252) + 1e-6)
+    rvs = session_rv(d, hb)
+    f["lrv_hourly_5d"] = 0.5 * np.log(s(rvs).rolling(5, min_periods=5).sum().values * 252 / 5 + 1e-12)
+    prev_c = np.r_[np.nan, c[:-1]]
+    tr = np.nanmax(np.vstack([hi - lo, np.abs(hi - prev_c), np.abs(lo - prev_c)]), axis=0)
+    f["atr14_pct"] = wilder(tr, 14) / c
+    up, dn = np.clip(np.r_[np.nan, np.diff(c)], 0, None), np.clip(-np.r_[np.nan, np.diff(c)], 0, None)
+    au, ad = wilder(up, 14), wilder(dn, 14)
+    f["rsi14"] = 100 - 100 / (1 + au / np.maximum(ad, 1e-12))
+    for k in (20, 50, 200):
+        f[f"dist_sma{k}"] = c / s(c).rolling(k, min_periods=k).mean().values - 1
+    sd20 = s(c).rolling(20, min_periods=20).std(ddof=0).values
+    f["bb_pos20"] = (c - s(c).rolling(20, min_periods=20).mean().values) / np.maximum(2 * sd20, 1e-12)
+    f["log_vol_ratio20"] = np.log((v + 1) / (s(v).rolling(20, min_periods=20).mean().values + 1))
+    f["dd_252"] = c / s(hi).rolling(252, min_periods=120).max().values - 1
+    mn, mx = s(lo).rolling(20, min_periods=20).min().values, s(hi).rolling(20, min_periods=20).max().values
+    f["range_pos20"] = (c - mn) / np.maximum(mx - mn, 1e-12)
+    f["gap_1d"] = np.log(o / prev_c)
+    sp = spy.set_index("date")["close"].reindex(pd.DatetimeIndex(d["date"])).ffill().values
+    lsp = np.log(sp); spr = np.r_[np.nan, np.diff(lsp)]
+    f["spy_ret_5d"] = lsp - np.r_[np.full(5, np.nan), lsp[:-5]]
+    f["spy_ret_20d"] = lsp - np.r_[np.full(20, np.nan), lsp[:-20]]
+    f["spy_lrv_20d"] = np.log(s(spr).rolling(20, min_periods=20).std().values * np.sqrt(252) + 1e-6)
+    return pd.DataFrame(f)
+
+TECH_COLS = list(tech_frame(BARS_D[TICKERS[0]].iloc[:300], BARS_H[TICKERS[0]], SPY_D).columns)
+TECH_FULL = {t: tech_frame(BARS_D[t], BARS_H[t], SPY_D) for t in TICKERS}
+X_TECH = np.vstack([TECH_FULL[t].values[P.loc[P.ticker == t, "t_idx"].values] for t in TICKERS])
+_order = np.concatenate([np.flatnonzero((P.ticker == t).values) for t in TICKERS])
+X_TECH = X_TECH[np.argsort(_order)].astype(np.float32)
+print("TECH features:", X_TECH.shape, "| missing share:", float(np.isnan(X_TECH).mean().round(4)))
+
+# causality: recompute on data truncated at the decision session
+for r in np.random.default_rng(1).choice(np.flatnonzero(VA | TE), 6, replace=False):
+    t, i = P.at[r, "ticker"], int(P.at[r, "t_idx"])
+    d_cut = BARS_D[t].iloc[: i + 1]
+    h_cut = BARS_H[t][BARS_H[t]["session"] <= d_cut["date"].iloc[-1]]
+    v_cut = tech_frame(d_cut, h_cut, SPY_D[SPY_D["date"] <= d_cut["date"].iloc[-1]]).values[-1]
+    assert np.allclose(v_cut, X_TECH[r], equal_nan=True, rtol=1e-5, atol=1e-6), f"TECH feature uses future data ({t}, row {r})"
+print("TECH causality test passed (truncated recomputation equals stored features).")
+tick("5 tech")

@@ -1,0 +1,1045 @@
+# %% [markdown]
+## 25. The three reports (Computer Vision, NLP, Multimodal)
+
+Built with ReportLab **only from artifacts saved by this run** (tables, figures, registry, freeze manifest, final results). The fixed text describes the design; every number, including every number in the discussion and conclusion paragraphs, is read from a file or a table at build time. A model that did not run appears as "Not Run". Missing artifacts are listed on the first page and the title starts with "INCOMPLETE DRAFT". In QUICK_VERIFY mode every page carries the stamp. Tables and paragraphs marked *post-hoc* come from the addendum §23A, which was written after the test block had been opened. Filing text is never printed beyond short n-grams and tokens.
+
+# %%
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, KeepTogether
+from reportlab.platypus import Image as RLImage
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.units import cm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from PIL import Image as PILImage
+
+FONT, FONT_B = "Helvetica", "Helvetica-Bold"
+if Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf").exists():
+    pdfmetrics.registerFont(TTFont("DejaVu", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
+    pdfmetrics.registerFont(TTFont("DejaVu-Bold", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"))
+    FONT, FONT_B = "DejaVu", "DejaVu-Bold"
+SS = getSampleStyleSheet()
+BODY = ParagraphStyle("b", parent=SS["BodyText"], fontName=FONT, fontSize=9.5, leading=12.8, spaceAfter=5)
+H1s = ParagraphStyle("h1", parent=SS["Heading1"], fontName=FONT_B, fontSize=14, spaceBefore=10, spaceAfter=6)
+H2s = ParagraphStyle("h2", parent=SS["Heading2"], fontName=FONT_B, fontSize=11, spaceBefore=6, spaceAfter=4)
+TITLE = ParagraphStyle("t", parent=SS["Title"], fontName=FONT_B, fontSize=17, leading=21)
+CAP = ParagraphStyle("c", parent=BODY, fontSize=8, textColor=colors.HexColor("#555555"), spaceAfter=9)
+TCAP = ParagraphStyle("tc", parent=BODY, fontName=FONT_B, fontSize=8.3, leading=10.5, spaceBefore=4, spaceAfter=3)
+CELL = ParagraphStyle("cell", parent=BODY, fontSize=6.8, leading=8.2, spaceAfter=0)
+REQUIRED_MISSING = []
+
+def Pp(text, style=BODY):
+    return Paragraph(re.sub(r"&(?!amp;|lt;|gt;|quot;|#\d+;)", "&amp;", str(text)), style)
+def fmt(v, d=3):
+    if v is None or (isinstance(v, (float, np.floating)) and not np.isfinite(v)):
+        return "-"
+    if isinstance(v, (float, np.floating)):
+        return f"{v:.{d}f}"
+    return str(v)
+P_COLS = {"p", "p_holm", "p_dev", "p_raw"}
+INT_COLS = {"n", "size", "n_perm", "tests", "better", "worse", "no clear difference", "rows", "rows_compared", "B"}
+def fmt_cell(col, v, d=3):
+    """p-values as '<0.001' or three decimals; learning rates in scientific notation; counts as integers."""
+    if v is None or (isinstance(v, (float, np.floating)) and not np.isfinite(v)):
+        return "-"
+    if col in P_COLS and isinstance(v, (int, float, np.floating)):
+        return "<0.001" if float(v) < 0.001 else f"{float(v):.3f}"
+    if col == "lr" and isinstance(v, (int, float, np.floating)):
+        return f"{float(v):.1e}"
+    if col in INT_COLS and isinstance(v, (float, np.floating)) and float(v).is_integer():
+        return str(int(v))
+    return fmt(v, d)
+
+PHASE_A_TABLES = {"phase_a_baseline_choice.csv", "test_H1c.csv", "test_H2c_events.csv", "test_H2c_panel.csv", "test_H3c.csv", "test_H8.csv", "test_H8b.csv", "test_H8c.csv",
+                  "hypotheses_phase_a.csv", "phase_a_panel_test.csv", "phase_a_event_test.csv", "cv_ablations_val_hiB.csv", "nlp_ablations_val_hiB.csv", "test_H5_hiB.csv",
+                  "mc_scale_val.csv", "mc_calibration_test_scaled.csv", "phase_a_repro_check.csv",
+                  "test_H8d.csv", "test_H8e.csv", "test_H8f.csv", "test_H1d.csv", "test_H2d_events.csv"} | \
+                 {f"secondary_{a_}_{k_}_test.csv" for a_ in ("cv", "nlp") for k_ in ("dir", "vol", "dd")} | \
+                 {"combo_selection.csv", "combo_by_size.csv", "combo_grid.csv", "combo_grid_summary.csv", "test_H9a.csv", "test_H9b.csv", "test_H9c.csv", "test_H9d.csv",
+                  "text_change_quintiles.csv", "text_features_corr.csv", "test_H10a.csv", "test_H10b.csv", "test_H11.csv", "event_study_timing_test.csv", "hypothesis_register.csv",
+                  "combo_grid_test.png", "research_design.png"}
+OPTIONAL_IN_QUICK = {"cv_lr_probe.csv", "nlp_lr_probe.csv", "cv_ablations_val.csv"} | PHASE_A_TABLES      # QUICK skips the probes, two ablations and parts of the addendum
+def rtab(name):
+    p_ = SUB["tables"] / name
+    if not p_.exists():
+        if not (QUICK and name in OPTIONAL_IN_QUICK):
+            REQUIRED_MISSING.append(name)
+        return None
+    try:
+        return pd.read_csv(p_, dtype={"item": str})
+    except Exception:
+        return None
+def tbl(df, cols=None, max_rows=28, d=3, index=False, caption=None):
+    if df is None or len(df) == 0:
+        return Pp("<i>Not available (the step was Not Run or produced no rows).</i>")
+    x = df.reset_index() if index else df
+    x = x[[c for c in cols if c in x.columns]] if cols else x
+    x = x.head(max_rows).iloc[:, :11]
+    data = [[Paragraph(html.escape(str(c)), CELL) for c in x.columns]] + \
+           [[Paragraph(html.escape(fmt_cell(str(c), v, d)), CELL) for c, v in zip(x.columns, row)] for row in x.values.tolist()]
+    t = Table(data, repeatRows=1, colWidths=[17 * cm / len(x.columns)] * len(x.columns))
+    t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e5e7eb")), ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#9ca3af")),
+                           ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+    return KeepTogether([Pp(caption, TCAP), t]) if caption else t
+def figp(name, caption, width=16 * cm):
+    p_ = SUB["figures"] / name
+    if not p_.exists():
+        REQUIRED_MISSING.append(name); return Pp(f"<i>Figure {name} not available.</i>")
+    w, h = PILImage.open(p_).size
+    return KeepTogether([RLImage(str(p_), width=width, height=min(width * h / w, 22 * cm)), Pp(caption, CAP)])
+def mdtext(name):
+    p_ = SUB["results"] / name
+    return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", html.escape(p_.read_text())) if p_.exists() else "Not available."
+
+REFS = {
+ "araci": "Araci, D. (2019). FinBERT: Financial sentiment analysis with pre-trained language models. arXiv:1908.10063.",
+ "baltrusaitis": "Baltrusaitis, T., Ahuja, C., & Morency, L.-P. (2019). Multimodal machine learning: A survey and taxonomy. IEEE TPAMI, 41(2), 423-443.",
+ "beltagy": "Beltagy, I., Peters, M. E., & Cohan, A. (2020). Longformer: The long-document transformer. arXiv:2004.05150.",
+ "cohen": "Cohen, L., Malloy, C., & Nguyen, Q. (2020). Lazy prices. The Journal of Finance, 75(3), 1371-1415.",
+ "corsi": "Corsi, F. (2009). A simple approximate long-memory model of realized volatility. Journal of Financial Econometrics, 7(2), 174-196.",
+ "dettmers": "Dettmers, T., Pagnoni, A., Holtzman, A., & Zettlemoyer, L. (2023). QLoRA: Efficient finetuning of quantized LLMs. NeurIPS 36.",
+ "dosovitskiy": "Dosovitskiy, A., et al. (2021). An image is worth 16x16 words: Transformers for image recognition at scale. ICLR.",
+ "dodge": "Dodge, J., Ilharco, G., Schwartz, R., Farhadi, A., Hajishirzi, H., & Smith, N. (2020). Fine-tuning pretrained language models: Weight initializations, data orders, and early stopping. arXiv:2002.06305.",
+ "geirhos": "Geirhos, R., Jacobsen, J.-H., Michaelis, C., Zemel, R., Brendel, W., Bethge, M., & Wichmann, F. A. (2020). Shortcut learning in deep neural networks. Nature Machine Intelligence, 2(11), 665-673.",
+ "lopezlira": "Lopez-Lira, A., & Tang, Y. (2023). Can ChatGPT forecast stock price movements? Return predictability and large language models. arXiv:2304.07619.",
+ "mosbach": "Mosbach, M., Andriushchenko, M., & Klakow, D. (2021). On the stability of fine-tuning BERT: Misconceptions, explanations, and strong baselines. ICLR.",
+ "glasserman": "Glasserman, P., & Lin, C. (2023). Assessing look-ahead bias in stock return predictions generated by GPT sentiment analysis. arXiv:2309.17322.",
+ "guo": "Guo, C., Pleiss, G., Sun, Y., & Weinberger, K. Q. (2017). On calibration of modern neural networks. ICML, PMLR 70, 1321-1330.",
+ "he_resnet": "He, K., Zhang, X., Ren, S., & Sun, J. (2016). Deep residual learning for image recognition. CVPR, 770-778.",
+ "he_deberta": "He, P., Gao, J., & Chen, W. (2023). DeBERTaV3: Improving DeBERTa using ELECTRA-style pre-training with gradient-disentangled embedding sharing. ICLR.",
+ "hendrycks": "Hendrycks, D., & Dietterich, T. (2019). Benchmarking neural network robustness to common corruptions and perturbations. ICLR.",
+ "ho": "Ho, T.-T., & Huang, Y. (2021). Stock price movement prediction using sentiment analysis and candlestick chart representation. Sensors, 21(23), 7957.",
+ "holm": "Holm, S. (1979). A simple sequentially rejective multiple test procedure. Scandinavian Journal of Statistics, 6(2), 65-70.",
+ "hu": "Hu, E. J., et al. (2022). LoRA: Low-rank adaptation of large language models. ICLR.",
+ "huang": "Huang, A. H., Wang, H., & Yang, Y. (2023). FinBERT: A large language model for extracting information from financial text. Contemporary Accounting Research, 40(2), 806-841.",
+ "jkx": "Jiang, J., Kelly, B., & Xiu, D. (2023). (Re-)Imag(in)ing price trends. The Journal of Finance, 78(6), 3193-3249.",
+ "jocher": "Jocher, G., Chaurasia, A., & Qiu, J. (2023). Ultralytics YOLOv8 (software). https://github.com/ultralytics/ultralytics",
+ "ke": "Ke, Z. T., Kelly, B. T., & Xiu, D. (2019). Predicting returns with text data. NBER Working Paper 26186.",
+ "kunsch": "Kunsch, H. R. (1989). The jackknife and the bootstrap for general stationary observations. The Annals of Statistics, 17(3), 1217-1241.",
+ "lerman": "Lerman, A., & Livnat, J. (2010). The new Form 8-K disclosures. Review of Accounting Studies, 15(4), 752-778.",
+ "liu_convnext": "Liu, Z., Mao, H., Wu, C.-Y., Feichtenhofer, C., Darrell, T., & Xie, S. (2022). A ConvNet for the 2020s. CVPR, 11976-11986.",
+ "liu_roberta": "Liu, Y., et al. (2019). RoBERTa: A robustly optimized BERT pretraining approach. arXiv:1907.11692.",
+ "liu_swin": "Liu, Z., et al. (2021). Swin Transformer: Hierarchical vision transformer using shifted windows. ICCV, 10012-10022.",
+ "loughran11": "Loughran, T., & McDonald, B. (2011). When is a liability not a liability? Textual analysis, dictionaries, and 10-Ks. The Journal of Finance, 66(1), 35-65.",
+ "loughran16": "Loughran, T., & McDonald, B. (2016). Textual analysis in accounting and finance: A survey. Journal of Accounting Research, 54(4), 1187-1230.",
+ "loukas": "Loukas, L., et al. (2022). FiNER: Financial numeric entity recognition for XBRL tagging. ACL 2022, 4419-4431.",
+ "patton": "Patton, A. J. (2011). Volatility forecast comparison using imperfect volatility proxies. Journal of Econometrics, 160(1), 246-256.",
+ "redmon": "Redmon, J., Divvala, S., Girshick, R., & Farhadi, A. (2016). You only look once: Unified, real-time object detection. CVPR, 779-788.",
+ "sarkar": "Sarkar, S. K., & Vafa, K. (2024). Lookahead bias in pretrained language models. SSRN Working Paper 4754678.",
+ "selvaraju": "Selvaraju, R. R., et al. (2017). Grad-CAM: Visual explanations from deep networks via gradient-based localization. ICCV, 618-626.",
+ "sezer": "Sezer, O. B., & Ozbayoglu, A. M. (2019). Financial trading model with stock bar chart image time series with deep convolutional neural networks. Intelligent Automation & Soft Computing, 26(2), 323-334.",
+ "sundararajan": "Sundararajan, M., Taly, A., & Yan, Q. (2017). Axiomatic attribution for deep networks. ICML, PMLR 70, 3319-3328.",
+ "tan": "Tan, M., & Le, Q. (2019). EfficientNet: Rethinking model scaling for convolutional neural networks. ICML, PMLR 97, 6105-6114.",
+ "tetlock": "Tetlock, P. C. (2007). Giving content to investor sentiment: The role of media in the stock market. The Journal of Finance, 62(3), 1139-1168.",
+ "touvron": "Touvron, H., et al. (2023). Llama 2: Open foundation and fine-tuned chat models. arXiv:2307.09288.",
+ "yang": "Yang, H., Liu, X.-Y., & Wang, C. D. (2023). FinGPT: Open-source financial large language models. arXiv:2306.06031.",
+}
+def refs(keys):
+    st_ = ParagraphStyle("r", parent=BODY, fontSize=8.3, leading=10.5, leftIndent=12, firstLineIndent=-12)
+    return [Paragraph(html.escape(REFS[k]), st_) for k in sorted(keys)]
+
+_n_exec = int(sum(1 for r_ in json.loads(VAULT_LOG.read_text()) if r_.get("item") == "panel_labels")) if VAULT_LOG.exists() else 0
+RUN_LINE = (f"Run {RUN_MODE} ({STAMP}); configuration {cfg_hash(CFG)}; freeze {FREEZE['selections_sha256']} made {FREEZE.get('frozen_utc')} "
+            f"({len(FREEZE['freeze_history'])} earlier freezes; resumed {len(FREEZE.get('resumed_utc', []))} time(s) with identical selections and configuration); "
+            f"the locked test labels were opened in {_n_exec} notebook execution(s) ({FINAL['test_openings']} logged openings: panel and filing-event labels once per execution, "
+            f"later executions only re-reading them to build the post-hoc addendum); GPU of the confirmatory run {FREEZE.get('gpu', 'n/a')}, "
+            f"GPU of this execution {GPU_NAME}; built {now_utc()}.")
+UNIVERSE_LINE = ("; ".join(f"{s}: {', '.join(t for t in TICKERS if SECTOR_OF[t] == s)}" for s in SECTORS) +
+                 ". Replacements versus the brief (no verified 10-year hourly bars): " + ", ".join(f"{a}->{b}" for a, b in REPLACED.items()) + ".")
+def common_front(kind):
+    return [Pp(f"Master of Applied Artificial Intelligence, University of Wollongong in Dubai. {RUN_LINE}"),
+            Pp("<b>Educational research; not financial advice. Every result is an out-of-sample predictive association, not a cause.</b>"),
+            Pp("Data", H2s), Pp(f"Universe ({len(TICKERS)} stocks): {UNIVERSE_LINE}"),
+            Pp(f"Prices: TriFrame tier-A verified bars (SHA-256 manifest {DATA_MANIFEST_SHA256[:12]}), split-adjusted, not dividend-adjusted; "
+               "1-week, 1-day and regular-hours 1-hour bars; data end 2026-10-09. Decisions 2016-10-10 onward; blocks: train 2016-10 to 2020-12, "
+               "inner 2021 (early stopping and calibration), validation 2022-2023 (all selection), locked test 2024-01 to 2026-08 (opened after "
+               "the freeze; every opening is logged). 40-session purge between blocks. Targets at 5/10/20/40 sessions: 3-class direction with a "
+               "0.5 sigma sqrt(h) band, log realised volatility from hourly bars, and a >10 % drawdown."),
+            Pp("<b>Confirmatory and post-hoc results.</b> The hypotheses H1-H7 and every selection were fixed and frozen before the test block was opened. After the "
+               "test a methodological review asked for stronger baselines (numbers-only models instead of only the prior), a test of whether charts and text add "
+               "information to technical indicators (H8), and more precise p-values for the many-test ablations. These additions are labelled <i>post-hoc</i> "
+               "wherever they appear; they use the same locked test rows, only models trained on the training block and tuned on 2021, and baselines chosen on "
+               "validation. They do not replace the confirmatory results."),
+            tbl(rtab("leakage_tests.csv"), caption="Leakage tests (all must pass)")]
+def build_pdf(path, title, sections):
+    REQUIRED_MISSING.clear()
+    story_body = []
+    for heading, items in (sections() if callable(sections) else sections):
+        story_body.append(Pp(heading, H1s)); story_body += items
+    full_title = ("INCOMPLETE DRAFT: " if REQUIRED_MISSING else "") + title
+    story = [Pp(full_title, TITLE)]
+    if QUICK:
+        story.append(Pp("<b>QUICK_VERIFY - NOT RESEARCH RESULTS.</b> Reduced run (10 stocks, short training) that checks the pipeline. Do not cite any number."))
+    if REQUIRED_MISSING:
+        story.append(Pp("Missing artifacts: " + ", ".join(sorted(set(REQUIRED_MISSING))), CAP))
+    story += story_body
+    doc = SimpleDocTemplate(str(path), pagesize=A4, leftMargin=2 * cm, rightMargin=2 * cm, topMargin=1.8 * cm, bottomMargin=1.8 * cm, title=full_title)
+    def on_page(c_, d_):
+        c_.saveState(); c_.setFont(FONT, 7); c_.drawString(2 * cm, 1.1 * cm, f"{title} | {STAMP} | page {d_.page}"); c_.restoreState()
+    doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
+    return path
+
+def hyp_line(df, label):
+    if df is None or not len(df):
+        return f"{label}: Not Run."
+    return f"{label}: {int(df['supported'].sum())} of {len(df)} Holm-corrected tests supported on the locked test block."
+
+# ---------------------------------------------------------------- data-driven text helpers (every number below is read from a table)
+H1C, H2C_EV, H2C_PANEL, H3C, H8, H8B, H8C = (globals().get(n_) for n_ in ("H1C", "H2C_EV", "H2C_PANEL", "H3C", "H8", "H8B", "H8C"))
+H5_HI, MC_TEST_SCALED = globals().get("H5_HI"), globals().get("MC_TEST_SCALED")
+H8D, H8E, H8F, H1D, H2D = (globals().get(n_) for n_ in ("H8D", "H8E", "H8F", "H1D", "H2D"))
+COLS_D = ["task", "A", "B", "skill_A", "skill_B", "delta", "lo", "hi", "p_holm", "verdict"]
+COLS_V = ["task", "A", "B", "delta", "lo", "hi", "p_holm", "verdict"]
+TNAME = {"dir": "direction", "vol": "volatility", "dd": "drawdown"}
+def _ok(df, *cols):
+    return df is not None and len(df) > 0 and all(c in df.columns for c in cols)
+def vcounts(df, prefix=None):
+    if not _ok(df, "task", "verdict"):
+        return None
+    d = df if prefix is None else df[df["task"].astype(str).str.startswith(prefix)]
+    vc = d["verdict"].value_counts()
+    return int(vc.get("better", 0)), int(vc.get("no clear difference", 0)), int(vc.get("worse", 0)), len(d)
+def vphrase(df, prefix=None):
+    c = vcounts(df, prefix)
+    if c is None:
+        return "not run"
+    return f"better in {c[0]} of {c[3]} tasks, no clear difference in {c[1]}, worse in {c[2]}"
+def sig_tasks(df, prefix):
+    if not _ok(df, "task", "supported"):
+        return []
+    return [str(t) for t, s in zip(df["task"], df["supported"]) if str(t).startswith(prefix) and bool(s)]
+def mean_of(df, col, prefix):
+    if not _ok(df, "task", col):
+        return float("nan")
+    return float(df[df["task"].astype(str).str.startswith(prefix)][col].mean())
+def best_epoch_text(models):
+    cur = rtab("cv_training_curves.csv") if models is CV_MAIN else rtab("nlp_training_curves.csv")
+    if not _ok(cur, "model", "epoch", "inner_loss"):
+        return ""
+    cur = cur[cur["model"].isin(models)]
+    if not len(cur):
+        return ""
+    best = cur.loc[cur.groupby("model")["inner_loss"].idxmin()]
+    n1, nm = int((best["epoch"] == 1).sum()), best["model"].nunique()
+    return (f"For {n1} of {nm} fine-tuned networks the lowest loss on the early-stopping block (2021) was reached after the first epoch, so the checkpoint kept by early "
+            f"stopping is the one from epoch 1 and later epochs only fitted the training block better. Short, early-stopped fine-tuning is therefore the regime these results describe.")
+def text_vs_calendar_text():
+    """Data-driven reading of H8c-H8f for volatility: is the text gain content, calendar or company identity?"""
+    c, d, e, f = vcounts(H8C, "vol"), vcounts(H8D, "vol"), vcounts(H8E, "vol"), vcounts(H8F, "vol")
+    if not (c and d and e and f):
+        return "The calendar and company controls were not run."
+    s = (f"For volatility, adding the filing-calendar columns alone to the technical model is {vphrase(H8D, 'vol')}; adding the text on top of the calendar (H8e) is "
+         f"{vphrase(H8E, 'vol')}; adding the text on top of the calendar and the company identity (H8f) is {vphrase(H8F, 'vol')}. ")
+    mC, mD, mE, mF = (mean_of(x, "delta", "vol") for x in (H8C, H8D, H8E, H8F))
+    s += (f"Mean gain in R-squared over the four volatility horizons: technical + text versus technical {mC:+.3f}; calendar alone {mD:+.3f}; "
+          f"text beyond the calendar {mE:+.3f}; text beyond the calendar and the company {mF:+.3f}. ")
+    if f[0] > f[3] / 2:
+        s += "So the text carries volatility information beyond knowing when filings happen and which company filed them."
+    elif d[0] > d[3] / 2 and (e[0] > 0 or f[0] > 0):
+        s += (f"So most of the volatility gain comes from the filing calendar (proximity to earnings filings); the words add a smaller but statistically supported amount "
+              f"in {e[0]} of {e[3]} horizons beyond the calendar and in {f[0]} of {f[3]} beyond the calendar and the company.")
+    elif e[0] > e[3] / 2:
+        s += "So the text adds volatility information beyond the filing calendar, but most of it is explained once the company is known: the embeddings largely identify the firm."
+    elif d[0] > d[3] / 2:
+        s += "So the volatility gain is explained by the filing calendar (proximity to earnings filings); no supported gain from the words remains."
+    else:
+        s += "The evidence on where the gain comes from is mixed; it should not be attributed to the content of the text."
+    return s
+def abl_delta(df, comparison, target):
+    if not _ok(df, "comparison", "target", "delta"):
+        return None
+    r = df[(df["comparison"] == comparison) & (df["target"] == target)]
+    return float(r["delta"].iloc[0]) if len(r) else None
+
+# ---------------------------------------------------------------- Phase A2d: secondary metrics, contributions, training stability, shortcut learning
+def _sec(nm, kd):
+    return rtab(f"secondary_{nm}_{kd}_test.csv")
+def accuracy_text(nm):
+    """Plain accuracy, balanced accuracy and log loss of the validation-chosen model versus the uninformed prior (direction)."""
+    d = _sec(nm, "dir")
+    if not _ok(d, "role", "task", "accuracy", "balanced_acc", "log_loss"):
+        return ""
+    pr = d[d["role"] == "uninformed prior"].set_index("task"); bm = d[d["role"].astype(str).str.startswith("best")].set_index("task")
+    ts = [t for t in TASKS if t in bm.index and t in pr.index]
+    if not ts:
+        return ""
+    n_acc = sum(float(bm.loc[t, "accuracy"]) > float(pr.loc[t, "accuracy"]) for t in ts)
+    d_bal = float(np.mean([float(bm.loc[t, "balanced_acc"]) - float(pr.loc[t, "balanced_acc"]) for t in ts]))
+    d_ll = float(np.mean([float(bm.loc[t, "log_loss"]) - float(pr.loc[t, "log_loss"]) for t in ts]))
+    return (f"<b>Accuracy.</b> The plain accuracy of the validation-chosen model is above that of always predicting the most common class in {n_acc} of {len(ts)} direction tasks "
+            f"(for example {ts[0]}: {float(bm.loc[ts[0], 'accuracy']):.3f} versus {float(pr.loc[ts[0], 'accuracy']):.3f}); its balanced accuracy is higher by {d_bal:+.3f} on average "
+            f"and its log loss differs by {d_ll:+.3f} (lower is better). Accuracy rewards a model that always predicts the majority class, which is why macro-F1 and skill over a "
+            f"shuffled null are the primary direction metrics: any edge lies in finding UP and DOWN moves, not in being right more often overall.")
+def brier_text(nm):
+    """Ranking (ROC-AUC) versus probability level (Brier skill) for drawdown."""
+    d = _sec(nm, "dd")
+    if not _ok(d, "role", "task", "auc", "bss"):
+        return ""
+    bm = d[d["role"].astype(str).str.startswith("best")]
+    if not len(bm):
+        return ""
+    n_pos = int((bm["bss"] > 0).sum())
+    return (f"<b>Drawdown probabilities.</b> The validation-chosen model has ROC-AUC {bm['auc'].min():.2f} to {bm['auc'].max():.2f}, but a positive Brier skill score (probabilities "
+            f"closer to the outcomes than a constant forecast at the training-block base rate) in {n_pos} of {len(bm)} tasks (range {bm['bss'].min():+.3f} to {bm['bss'].max():+.3f}). "
+            + ("It ranks drawdown risk better than it sets the probability level, which drifts when the base rate moves between periods." if n_pos < len(bm) / 2 else
+               "Its probabilities are mostly better than a constant base-rate forecast."))
+def secondary_section(nm):
+    return [Pp("The primary metrics above are complemented here by accuracy, balanced accuracy, log loss and per-class F1 (direction), QLIKE, Spearman and MAE (volatility), and PR-AUC, "
+               "Brier skill and calibration error (drawdown), for the same models on the same locked-test rows. Post-hoc: these metrics were computed in the confirmatory run's code "
+               "but not reported; nothing was selected on them."),
+            Pp(accuracy_text(nm)), Pp(brier_text(nm)),
+            tbl(_sec(nm, "dir"), max_rows=24, caption="Direction: macro-F1, accuracy, balanced accuracy, log loss and F1 per class on the locked test"),
+            tbl(_sec(nm, "vol"), max_rows=24, caption="Volatility: R-squared, QLIKE (lower is better), Spearman correlation and mean absolute error on the locked test"),
+            tbl(_sec(nm, "dd"), max_rows=24, caption="Drawdown: ROC-AUC, PR-AUC, Brier skill score (vs a constant forecast at the training base rate), calibration error (ECE) and base rate on the locked test")]
+def shuffle_control_text():
+    d = _sec("cv", "dir")
+    if not _ok(d, "role", "task", "macro_f1"):
+        return ""
+    g = d.pivot_table(index="task", columns="role", values="macro_f1", aggfunc="first")
+    need = ["label-shuffle control", "numbers-only baseline", "best CV model (validation)"]
+    if not all(c in g.columns for c in need):
+        return ""
+    g = g.dropna(subset=need)
+    n_beat = int((g[need[0]] > g[need[1]]).sum()); gap = float((g[need[2]] - g[need[0]]).mean())
+    return (f"<b>Why raw macro-F1 comparisons are inflated.</b> A ResNet-50 probe fitted on shuffled training labels, which carry no information about the future, scores a higher "
+            f"macro-F1 than the numbers-only baseline in {n_beat} of {len(g)} direction tasks, because the baselines predict mostly one class and macro-F1 punishes that. "
+            f"The validation-chosen CV model is {gap:+.3f} macro-F1 above this control on average; that gap and the H1d comparison, not the raw difference to the baselines, "
+            f"measure what the charts add.")
+def cv_contributions():
+    ds = sig_tasks(H1, "dir"); bd = vcounts(H1D)
+    items = ["A controlled benchmark of seven vision architectures (from-scratch CNN, ResNet-50, EfficientNet-B0, ConvNeXt-T, ViT-B/16, Swin-T, YOLOv8s-cls) on identical, "
+             "leakage-controlled rows: weekly, daily and hourly charts stacked as one input, four horizons, three targets, and a test block opened only after a hashed freeze.",
+             (f"A small, short-horizon direction signal in charts: supported over a shuffled null in {len(ds)} of 4 horizons ({', '.join(ds)})" if ds else
+              "No direction signal supported over a shuffled null") + (f"; judged fairly against the numbers-only baselines (H1d) the best CV model is better in {bd[0]} of {bd[3]} tasks." if bd else "."),
+             f"A negative result for risk: against simple numbers the charts are {vphrase(H1C, 'vol')} on volatility and {vphrase(H1C, 'dd')} on drawdown, with a candidate design "
+             f"explanation (per-chart price scaling removes the absolute volatility level; section 7).",
+             "A methodological check: raw macro-F1 comparisons against baselines that predict mostly one class are inflated; a label-shuffle control and own-null skill (H1d) correct for it (section 7).",
+             "Deployment evidence: robustness to screenshot corruptions, compute cost per model, and a dashboard recipe parity-tested against the notebook."]
+    return [Pp("<b>Contributions.</b>")] + [Pp(f"{i}. {s}") for i, s in enumerate(items, 1)]
+def _event_facts():
+    es, out = rtab("event_study_by_form_test.csv"), {}
+    if _ok(es, "group", "mean_abs_z"):
+        ctrl = es[es["group"].astype(str).str.startswith("no filing")]["mean_abs_z"]
+        fil = es[~es["group"].astype(str).str.startswith("no filing")]
+        if len(ctrl) and len(fil) and float(ctrl.iloc[0]) > 0:
+            out["ratio"] = float(fil["mean_abs_z"].mean()) / float(ctrl.iloc[0])
+        if len(fil):
+            out["rank"] = " > ".join(str(g_) for g_ in fil.sort_values("mean_abs_z", ascending=False)["group"])
+    it = rtab("event_study_8k_items_dev.csv")
+    if _ok(it, "item", "mean_abs_z"):
+        out["items"] = ", ".join(f"{r.item} ({r.mean_abs_z:.2f})" for r in it.head(2).itertuples())
+    return out
+def nlp_stability_text():
+    cur = rtab("nlp_training_curves.csv")
+    if not _ok(cur, "model", "epoch", "inner_loss"):
+        return ""
+    cur = cur[cur["model"].isin(NLP_MAIN)]
+    if not len(cur):
+        return ""
+    best = cur.groupby("model")["inner_loss"].min(); med = float(best.median())
+    bad = best[best > 1.2 * med]
+    n_tr = int(np.asarray(EVENT.mask["train"]).sum())
+    s = (f"<b>Training stability, and why TF-IDF ranks first on validation.</b> The fine-tuned encoders were trained on {n_tr:,} training-block filings. Their best early-stopping loss "
+         f"ranges from {best.min():.2f} to {best.max():.2f} (median {med:.2f}). ")
+    if len(bad):
+        rising = [m for m in bad.index if len(cur[cur["model"] == m]) > 1 and float(cur[cur["model"] == m].sort_values("epoch")["inner_loss"].iloc[-1]) > float(bad[m])]
+        s += ("; ".join(f"{LABEL_OF.get(m, m)} reached only {float(v):.2f}" for m, v in bad.items()) + ", well above the other encoders"
+              + (", and its loss rose again in the next epoch" if rising else "") + ": fine-tuning " + ("that model" if len(bad) == 1 else "those models")
+              + " was unstable at this data size, so the fine-tuned scores understate the architecture and the frozen features are the fairer reading. "
+              "Instability of large-encoder fine-tuning on small data sets is a documented phenomenon (Dodge et al. 2020; Mosbach et al. 2021), usually addressed with several seeds, "
+              "longer warm-up and layer-wise learning rates, which the pre-registered v3.1 protocol adopts. ")
+    if NLP_BEST and str(NLP_BEST).startswith("tfidf"):
+        s += ("With this few labelled filings, a regularised linear model on TF-IDF n-grams, which has far fewer effective parameters, has the best mean validation rank. "
+              "This is consistent with large encoders over-fitting small, noisy financial labels, and it is why the comparison is read through confidence intervals rather than ranks.")
+    return s
+def shortcut_text(short=False):
+    bd = vcounts(H2C_EV, "dd")
+    if not bd:
+        return ""
+    mC, mD, mE = mean_of(H8C, "delta", "vol"), mean_of(H8D, "delta", "vol"), mean_of(H8E, "delta", "vol")
+    cal_ok = np.isfinite(mD) and np.isfinite(mE)
+    shortcut = bd[0] == 0 and (not cal_ok or mD > mE)
+    if short:
+        return ("Most of the forecasting signal the language models find is who filed and when, not what the filing says." if shortcut else
+                "Part of the forecasting signal the language models find is who filed and when.")
+    parts = [f"against no-text baselines on the same filings the best NLP model is {vphrase(H2C_EV, 'dd')} for drawdown"]
+    if cal_ok:
+        parts.append(f"on the daily panel the filing-calendar columns alone add {mD:+.3f} R-squared for volatility, while the words add {mE:+.3f} beyond the calendar "
+                     f"(all text features together: {mC:+.3f})")
+    parts.append("the integrated-gradients tokens of the largest-reaction filings (section 6) include many dates, company names and formatting tokens")
+    s = "<b>Shortcut learning (post-hoc).</b> The evidence points the same way: " + "; ".join(parts) + ". "
+    s += ("The forecasting signal the language models find is therefore mostly who filed and when, not what the filing says: a case of shortcut learning, where a network exploits "
+          "an easy correlate of the label instead of the intended content (Geirhos et al. 2020). This is a negative result about text content, obtained with controls (per-company base rates, "
+          "numbers-only baselines, filing-calendar columns) that many filing-text studies omit; it complements reports of return predictability from language-model scores of news "
+          "(Lopez-Lira and Tang 2023), which concern headlines rather than periodic filings, by showing how much of a filing-based signal survives such controls." if shortcut else
+          "Part of the signal is who filed and when; only what survives these controls can be attributed to the content of the text.")
+    return s
+def nlp_contributions():
+    ef = _event_facts()
+    ev = ("A point-in-time event study (EDGAR acceptance time + 35 minutes, matched non-filing days as controls)"
+          + (f": filing days move prices {ef['ratio']:.1f} times as much as non-filing days on the locked test" if "ratio" in ef else "")
+          + (f", the forms rank {ef['rank']} by reaction size" if "rank" in ef else "")
+          + (f", the 8-K items with the largest reactions are {ef['items']}" if "items" in ef else "")
+          + ", and sector rankings are compared between development and test (" + hyp_line(H7, "H7").rstrip(".") + ").")
+    items = [ev,
+             f"A controlled comparison of {len(_nlp_ran)} language models spanning domain pre-training, size, long context and a 7-billion-parameter LLM, against TF-IDF, on identical "
+             "filings, with a test period after every model's pre-training cut-off (no look-ahead memory).",
+             "A shortcut-learning check: per-company base rates, numbers-only baselines and filing-calendar columns separate what the text says from who filed and when (sections 5a and 8). "
+             + shortcut_text(short=True),
+             "Theory-driven, interpretable text measures (the change in a filing's wording, Loughran-McDonald tone) and a reaction-size regression that separates the words from the "
+             "kind and timing of the filing (sections 5d and 5e).",
+             "Diagnostics for small-sample fine-tuning: training curves, unstable encoders and the TF-IDF result are reported rather than hidden (section 8)."]
+    return [Pp("<b>Contributions.</b>")] + [Pp(f"{i}. {s}") for i, s in enumerate(items, 1)]
+def deploy_dd_text():
+    lb = rtab("fusion_leaderboard_test.csv")
+    base = "presents probabilities calibrated on 2021 and a simulation range"
+    if not _ok(lb, "model", "target", "auc", "bss"):
+        return base
+    d = lb[(lb["model"] == "deploy_recipe") & (lb["target"] == "dd")]
+    if not len(d):
+        return base
+    if (d["bss"] <= 0).all():
+        return (base + f"; on the test its drawdown probabilities rank risk (ROC-AUC {d['auc'].min():.2f} to {d['auc'].max():.2f}) but their level is no better than a constant forecast "
+                f"at the training base rate (Brier skill {d['bss'].min():+.3f} to {d['bss'].max():+.3f}), so they are read as relative risk")
+    return base + f"; its drawdown probabilities beat a constant forecast at the training base rate in {int((d['bss'] > 0).sum())} of {len(d)} horizons"
+
+# ---------------------------------------------------------------- Phase A3: combinations, interpretable text features, ethics, register, v3.1 protocol
+H9A, H9B, H9C, H9D, H10A, H10B, H11 = (globals().get(n_) for n_ in ("H9A", "H9B", "H9C", "H9D", "H10A", "H10B", "H11"))
+def combo_text(modality, hdf, single_label):
+    sel = rtab("combo_selection.csv")
+    if not _ok(sel, "modality", "size"):
+        return "The combination study was not run."
+    s_ = sel[sel["modality"] == modality]
+    if not len(s_):
+        return "The combination study was not run for this modality."
+    sz = s_["size"].astype(int).value_counts()
+    s = (f"<b>Combinations of networks (post-hoc).</b> Every single model, pair and triple was averaged with equal weights (63 candidates) and re-calibrated on 2021 like every other ensemble; "
+         f"the best was chosen per task on validation: a single network in {int(sz.get(1, 0))}, a pair in {int(sz.get(2, 0))} and a triple in {int(sz.get(3, 0))} of {len(s_)} tasks. "
+         f"Against the best single {single_label} on the locked test the chosen combination is {vphrase(hdf)} (direction: {vphrase(hdf, 'dir')}; volatility: {vphrase(hdf, 'vol')}; drawdown: {vphrase(hdf, 'dd')}). ")
+    multi = set(s_.loc[s_["size"].astype(int) > 1, "task"])
+    if _ok(hdf, "task", "verdict") and int(sz.get(1, 0)) > 0:
+        hm = hdf[hdf["task"].isin(multi)]
+        s += (f"Where validation chose a single network ({int(sz.get(1, 0))} tasks) the combination is that network, so the difference is zero by construction; "
+              f"where it chose a pair or triple ({len(multi)} tasks) the combination is " + (vphrase(hm) if len(hm) else "not testable") + ". ")
+    nb = (vcounts(hdf) or (0, 0, 0, 0))[0]
+    s += ("Combining networks is therefore not worth it in this modality." if nb == 0 else
+          "Combining networks helps in some tasks; the gain is measured against the best single network of the same modality, not against the numbers-only baselines.")
+    return s
+def grid_text():
+    g = rtab("combo_grid_summary.csv")
+    if not _ok(g, "target", "n_cv", "n_nlp", "test_primary"):
+        return "The cross-modal combination grid was not run."
+    parts = []
+    for kd in ("dir", "vol", "dd"):
+        x = g[g["target"] == kd]
+        if not len(x):
+            continue
+        cv_only = x[x["n_nlp"] == 0]["test_primary"].max(); with_nlp = x[x["n_nlp"] > 0]["test_primary"].max()
+        parts.append(f"{TNAME[kd]}: best CV-only cell {cv_only:.3f}, best cell with NLP {with_nlp:.3f}")
+    c = vcounts(H9C)
+    verdict = ""
+    if c:
+        verdict = (f"Adding a combination of language models to a combination of vision networks helps in {c[0]} of {c[3]} tasks and is not worth it elsewhere; "
+                   if c[0] > 0 else "Adding a combination of language models to a combination of vision networks does not improve the locked-test results; ")
+    return (f"<b>Combinations of combinations (post-hoc).</b> For each task, the best combination of 1, 2 or 3 vision networks and of 0, 1, 2 or 3 language models (daily panel) was found on validation "
+            f"and fused with a validation-chosen weight, then re-calibrated on 2021 exactly like the confirmatory late fusion. Mean locked-test primary metric over the four horizons, " + "; ".join(parts) + ". "
+            f"The cell chosen on validation, against the best CV combination alone, is {vphrase(H9C)} (direction: {vphrase(H9C, 'dir')}; volatility: {vphrase(H9C, 'vol')}; "
+            f"drawdown: {vphrase(H9C, 'dd')}); against the strongest numbers-only baseline it is {vphrase(H9D)}. " + verdict +
+            "the simple numbers remain the benchmark to beat for volatility and drawdown.")
+def text_features_text():
+    cr = rtab("text_features_corr.csv")
+    s = "<b>Interpretable text features (post-hoc).</b> "
+    if _ok(cr, "feature", "target", "period", "rho"):
+        def _r(f_, t_, p_):
+            r = cr[(cr["feature"] == f_) & (cr["target"] == t_) & (cr["period"] == p_)]
+            return f"{float(r['rho'].iloc[0]):+.3f} [{float(r['lo'].iloc[0]):+.3f}, {float(r['hi'].iloc[0]):+.3f}]" if len(r) else "n/a"
+        s += (f"Text change (Lazy Prices; Cohen et al. 2020): Spearman correlation with the size of the reaction {_r('text change (10-K / 10-Q)', 'size of reaction |z|', 'development')} on development "
+              f"filings and {_r('text change (10-K / 10-Q)', 'size of reaction |z|', 'test')} on the test. ")
+        def _hi(f_, t_, p_):
+            r = cr[(cr["feature"] == f_) & (cr["target"] == t_) & (cr["period"] == p_)]
+            return (float(r["lo"].iloc[0]), float(r["hi"].iloc[0])) if len(r) else (np.nan, np.nan)
+        _cd, _ct = _hi("text change (10-K / 10-Q)", "size of reaction |z|", "development"), _hi("text change (10-K / 10-Q)", "size of reaction |z|", "test")
+        if _cd[1] < 0 and _ct[1] < 0:
+            s += ("In both periods, reports whose wording changed more drew a smaller immediate reaction, not a larger one. This is consistent with the inattention that Cohen et al. describe: "
+                  "the market does not price the change when the report is filed, and the return effect they document builds up over the following months. ")
+        if (cr["feature"] == "LM polarity").any():
+            s += (f"Loughran-McDonald polarity versus the signed abnormal return: {_r('LM polarity', 'signed abnormal return', 'test')} on the test "
+                  f"(FinBERT tone for reference: {_r('FinBERT tone (reference)', 'signed abnormal return', 'test')}). ")
+            _ih = H11[H11["A"] == "metadata + interpretable text features"] if _ok(H11, "A", "delta") else None
+            if (cr["feature"] == "LM negative-word share").any() and _ih is not None and len(_ih):
+                _d = float(_ih["delta"].iloc[0])
+                s += (f"The share of Loughran-McDonald negative words goes with the size of the reaction ({_r('LM negative-word share', 'size of reaction |z|', 'development')} development, "
+                      f"{_r('LM negative-word share', 'size of reaction |z|', 'test')} test); "
+                      + (f"but once form, 8-K item, sector and timing are known the interpretable features add only {_d:+.3f} R-squared (section 5e), so most of this association is the kind of filing. "
+                         if _d < 0.01 else f"beyond form, 8-K item, sector and timing the interpretable features add {_d:+.3f} R-squared (section 5e). "))
+        else:
+            s += "The Loughran-McDonald dictionary could not be loaded in this execution (reported as Not Run). "
+    s += (f"Added to the no-text LightGBM on filing events, text change is {vphrase(H10A)}"
+          + (f"; text change plus dictionary tone is {vphrase(H10B)}." if _ok(H10B, "verdict") else "."))
+    return s
+def h11_text():
+    if not _ok(H11, "A", "r2_A", "r2_B", "delta", "verdict"):
+        return "<b>Reaction size beyond the metadata (post-hoc).</b> Not run."
+    B_ = H11["B"] if "B" in H11.columns else pd.Series(["metadata"] * len(H11))
+    rows = [f"{r.A}: R-squared {r.r2_A:.3f} versus {r.r2_B:.3f} for {b_} (difference {r.delta:+.3f}, 95 % interval [{r.lo:+.3f}, {r.hi:+.3f}], {r.verdict})"
+            for r, b_ in zip(H11.itertuples(), B_)]
+    def _row(a_):
+        x_ = H11[H11["A"] == a_]
+        return x_.iloc[0] if len(x_) else None
+    w0, wc = _row("metadata + words (TF-IDF)"), _row("metadata + company + words (TF-IDF)")
+    if wc is not None and wc["verdict"] == "better":
+        concl = (f"Because TF-IDF n-grams contain company names, the decisive comparison keeps the company in the metadata: the words still add {float(wc['delta']):+.3f} R-squared. "
+                 "So the wording of a filing carries information about how strongly the market will react beyond what kind of filing it is, when it arrives and who filed it: "
+                 "this is the clearest evidence of text content in the study, and it concerns the size of the reaction, not its direction.")
+    elif wc is not None:
+        concl = (f"Because TF-IDF n-grams contain company names, the decisive comparison keeps the company in the metadata: then the words add {float(wc['delta']):+.3f} R-squared "
+                 f"({wc['verdict']})" + (f", against {float(w0['delta']):+.3f} without the company" if w0 is not None else "") +
+                 ". Most of what the words seemed to explain is therefore which company filed, the same shortcut found in the forecasting models (section 8).")
+    elif w0 is not None and w0["verdict"] == "better":
+        concl = "So the wording carries information about the size of the reaction beyond the kind and timing of the filing; this comparison does not control for the company."
+    else:
+        concl = "So, once the kind of filing and its timing are known, the words add no reliable information about the size of the reaction."
+    return ("<b>Do the words explain the size of the reaction beyond form, 8-K item, sector, timing and company? (post-hoc, H11)</b> " + "; ".join(rows) + ". " + concl)
+def timing_text():
+    d, t = rtab("event_study_timing_dev.csv"), rtab("event_study_timing_test.csv")
+    if not (_ok(d, "form", "session_bucket", "mean") and _ok(t, "form", "session_bucket", "mean")):
+        return ""
+    def _top(df):
+        x = df.sort_values("mean", ascending=False).iloc[0]
+        return f"{x['form']} {x['session_bucket']} ({float(x['mean']):.2f})"
+    return (f"<b>Filing timing.</b> The largest mean reaction by form and release time is {_top(d)} in the development blocks and {_top(t)} on the test; "
+            "filings released outside trading hours reach a market that has had no chance to trade on them, so their reaction is concentrated in the next session.")
+def ethics_items(kind):
+    items = [("Data access", "SEC EDGAR was queried under the SEC fair-access policy: a declared user agent with contact details and at most 8 requests per second. Filings are public records; "
+              "the price bars are a verified research data set used for non-commercial academic work only."),
+             ("Personal data", "No personal data are collected or processed. Company names appear because they are the subject of public filings."),
+             ("Model licences", "Pre-trained models are used under their published licences (for example Apache 2.0 or MIT for most vision backbones and encoders, "
+              "AGPL-3.0 for Ultralytics YOLOv8, and the Meta Llama 2 Community License for the gated FinGPT base model); no model weights are redistributed."),
+             ("Integrity of the evaluation", "Look-ahead bias is treated as a research-integrity issue: point-in-time timestamps, a test period after every language model's pre-training cut-off, "
+              "a hashed freeze before the test, a logged vault, and every post-hoc analysis labelled as such."),
+             ("Responsible use", "Markets are hard to predict and 'AI trading signals' are widely marketed. The reports state effect sizes with intervals, the dashboard withholds calls the test does not "
+              "support, and every output carries the statement that it is educational research and not financial advice."),
+             ("Compute", "The confirmatory run took about 4.2 GPU-hours (one data-centre GPU); later addenda reuse cached predictions and add CPU time only.")]
+    if kind == "nlp":
+        items.insert(2, ("Text use", "Filing text is processed for research and never reproduced beyond short n-grams and tokens in the reports."))
+    return [Pp(f"<b>{h}.</b> {b}") for h, b in items]
+def register_table(modules):
+    r = rtab("hypothesis_register.csv")
+    if not _ok(r, "id", "module"):
+        return tbl(None)
+    x = r[r["module"].isin(modules)] if modules else r
+    return tbl(x, ["id", "module", "type", "statement", "tests", "outcome"], max_rows=40,
+               caption="Hypothesis register: every hypothesis, whether it was fixed before the test (confirmatory) or added afterwards (post-hoc), and its outcome on the locked test")
+def protocol_items():
+    p = SUB["results"] / "v31_protocol.json"
+    if not p.exists():
+        return [Pp("The v3.1 protocol was not written in this execution.")]
+    j = json.loads(p.read_text())
+    return ([Pp(f"Registered {j.get('registered_utc')} (UTC); SHA-256 of the protocol file {str(j.get('sha256'))[:16]}. The 2024-2026 block is spent; v3.1 is tested only on new data.")] +
+            [Pp(f"<b>{s['heading']}.</b> {s['text']}") for s in j.get("sections", [])])
+def _sel_mm():
+    d = rtab("combo_selection.csv")
+    return d[d["modality"] == "CV + NLP"] if _ok(d, "modality") else None
+def h11_short():
+    if not _ok(H11, "A", "delta", "verdict"):
+        return ""
+    r = H11[H11["A"] == "metadata + company + words (TF-IDF)"]
+    scope = "the kind, timing and company of a filing"
+    if not len(r):
+        r, scope = H11[H11["A"] == "metadata + words (TF-IDF)"], "the kind and timing of a filing (not controlling for the company)"
+    if not len(r):
+        return ""
+    r = r.iloc[0]
+    return (f"Beyond {scope}, its words change the explained share of the reaction size by {float(r['delta']):+.3f} R-squared "
+            f"({r['verdict']}, post-hoc).")
+def _cbs(modality):
+    d = rtab("combo_by_size.csv")
+    return d[d["modality"] == modality] if _ok(d, "modality") else None
+def future_work(kind):
+    common = ("A confirmatory v3.1 has been pre-registered (protocol in the multimodal report): a new forward test period from 2026-12, a wider universe including delisted companies, "
+              "and five seeds per model. ")
+    if kind == "cv":
+        return Pp("<b>Future work.</b> " + common + "For vision specifically: a chart encoding that keeps the volatility level (fixed price scale in units of trailing volatility) next to the min-max chart, "
+                  "no vertical-rescale augmentation for the volatility head, and returns-image encodings in the style of Jiang, Kelly and Xiu (2023).")
+    return Pp("<b>Future work.</b> " + common + "For language specifically: layer-wise learning-rate decay and longer warm-up for the large encoders (Mosbach et al. 2021), QLoRA fine-tuning of FinGPT, "
+              "minute-stamped news next to filings, and the text-change and dictionary features as pre-specified inputs.")
+
+# %%
+# ================================================================ Report 1: Computer Vision
+cv_abs = (f"Seven vision models (Custom JKX-style CNN, ResNet-50, EfficientNet-B0, ConvNeXt-Tiny, ViT-B/16, Swin-T, YOLOv8s-cls) read weekly, "
+          f"daily and hourly candlestick charts of {len(TICKERS)} US stocks and forecast 3-class direction, realised volatility and a >10 % "
+          f"drawdown at 5, 10, 20 and 40 sessions. The validation-chosen best model was {CV_BEST} (mean rank over 12 tasks). " +
+          hyp_line(H1, "H1 (CV skill against the prior and the shuffled null)") + " " + hyp_line(H5, "H5 (fine-tuning beats frozen)") + " " + hyp_line(H6, "H6 (sector-specific rankings)") +
+          f" Post-hoc, against the strongest numbers-only baseline (HAR / momentum / trailing volatility, or LightGBM on 20 indicators, chosen on validation) the "
+          f"best CV model per task is {vphrase(H1C)}; direction (raw macro-F1, which flatters the CV model because the baselines predict mostly one class): {vphrase(H1C, 'dir')}; "
+          f"direction judged fairly, each model against its own shuffled null (H1d): {vphrase(H1D)}; volatility: {vphrase(H1C, 'vol')}; drawdown: {vphrase(H1C, 'dd')}.")
+
+def cv_training_text():
+    return Pp("One backbone shared by the three charts; features concatenated; a multi-task head (4 horizons x [3 direction logits, "
+              "volatility, drawdown]). ImageNet-pretrained timm backbones and the Ultralytics YOLOv8s-cls backbone are fine-tuned end-to-end (AdamW, "
+              "warm-up + cosine, bfloat16, batch 64 rows, up to 6 epochs, early stopping on 2021); the JKX-style CNN is trained from scratch. Augmentation "
+              "respects chart semantics (no flips; only vertical rescale, oldest-bar crop, brightness, noise). Calibration on 2021 only (temperature, Platt, linear). " +
+              best_epoch_text(CV_MAIN))
+
+def cv_discussion():
+    out = []
+    ds = sig_tasks(H1, "dir")
+    out.append(Pp(f"<b>Direction.</b> Against a null that shuffles labels within months (same class shares, no link to the future), the validation-chosen models show skill "
+                  f"in {len(ds)} of 4 horizons after Holm correction ({', '.join(ds) if ds else 'none'}); the mean skill over the four horizons is {mean_of(H1, 'skill', 'dir'):+.3f} macro-F1. "
+                  + ("The effect is small, which is expected for a 3-class label whose sideways band is scaled by volatility. " if ds else "No horizon reaches significance. ")
+                  + f"On raw macro-F1 against the strongest numbers-only baseline the best CV model is {vphrase(H1C, 'dir')}; that comparison flatters the CV model, because the "
+                  f"baselines predict mostly one class and macro-F1 punishes this. Judged fairly, each model against its own shuffled null (H1d, post-hoc), the best CV model is "
+                  f"{vphrase(H1D)}; read the H1d table for the size of the difference."))
+    if shuffle_control_text():
+        out.append(Pp(shuffle_control_text()))
+    vs, dsig = sig_tasks(H1, "vol"), sig_tasks(H1, "dd")
+    out.append(Pp(f"<b>Volatility and drawdown.</b> Against the uninformed benchmarks (R-squared 0, AUC 0.5) the CV models have skill in {len(vs)} of 4 volatility and {len(dsig)} of 4 drawdown tasks. "
+                  f"That comparison is weak, because trailing volatility alone predicts future volatility well. Against the strongest numbers-only baseline the best CV model is "
+                  f"{vphrase(H1C, 'vol')} for volatility and {vphrase(H1C, 'dd')} for drawdown (post-hoc, Holm-corrected)."))
+    da = abl_delta(rtab("cv_ablations_val_hiB.csv"), "with vs without augmentation", "vol")
+    expl = ""
+    if da is not None:
+        expl = (f" One candidate explanation, not a tested cause: each chart's price axis is scaled to that chart's own high and low, which removes the absolute volatility level from the image, "
+                f"and the vertical-rescale augmentation changes candle heights; the ablation without augmentation differs from the augmented model by {da:+.3f} R-squared on volatility (validation).")
+    out.append(Pp("<b>Why images may not carry the volatility level (a design finding).</b>" + expl +
+                  " Whatever the cause, the practical lesson is that a chart image normalised to its own price range should not be expected to forecast the level of risk; "
+                  "the volatility and drawdown heads need the absolute scale, which simple numbers supply directly."))
+    h5n = int(H5_HI["supported"].sum()) if _ok(H5_HI, "supported") else (int(H5["supported"].sum()) if _ok(H5, "supported") else 0)
+    h5t = len(H5_HI) if _ok(H5_HI, "supported") else (len(H5) if _ok(H5, "supported") else 0)
+    h5df = H5_HI if _ok(H5_HI, "delta", "p_holm") else H5
+    n_w = int(((h5df["delta"] < 0) & (h5df["p_holm"] < CFG["alpha"])).sum()) if _ok(h5df, "delta", "p_holm") else 0
+    out.append(Pp(f"<b>Fine-tuning versus frozen features.</b> Fine-tuning beats the frozen backbone in {h5n} of {h5t} (model, target) tests on the locked test block "
+                  f"({'5,000' if _ok(H5_HI, 'supported') else '1,000'} bootstrap draws) and is significantly worse in {n_w}. " +
+                  ("A significant loss from fine-tuning means that adapting every weight to noisy financial labels is not a safe default for that network. " if n_w else "") + best_epoch_text(CV_MAIN)))
+    k_t = int((CV_RANK_TEST.index == CV_BEST).argmax()) + 1 if (CV_BEST in CV_RANK_TEST.index) else None
+    out.append(Pp(f"<b>Validation versus test.</b> The validation winner {CV_BEST} ranks {k_t if k_t else 'n/a'} of {len(CV_RANK_TEST)} on the locked test; the best on the test ex post was "
+                  f"{CV_RANK_TEST.index[0] if len(CV_RANK_TEST) else 'n/a'}. Validation covers the 2022 bear market and the test a strong 2024-2026 market, so rankings are partly regime-dependent; "
+                  f"averaging the top-3 models (cv_top3) is the more robust choice and is what the dashboard uses."))
+    return out
+def cv_conclusion():
+    ds = sig_tasks(H1, "dir")
+    bv, bd = vcounts(H1C, "vol"), vcounts(H1C, "dd")
+    interp = ""
+    if bv and bd:
+        if bv[0] == 0 and bd[0] == 0:
+            interp = "In this design charts do not beat simple numbers on volatility or drawdown risk."
+        elif bv[0] + bd[0] < (bv[3] + bd[3]) / 2:
+            interp = "In this design charts beat simple numbers on volatility or drawdown risk in only a minority of tasks."
+        else:
+            interp = "In this design charts beat simple numbers on volatility or drawdown risk in most tasks."
+    dtxt = (f"Charts carry a statistically supported direction signal in {len(ds)} of 4 horizons (mean skill {mean_of(H1, 'skill', 'dir'):+.3f} macro-F1 over a shuffled null)."
+            if ds else "No horizon shows a statistically supported direction signal over the shuffled null.")
+    dtxt += f" Compared fairly with the numbers-only baselines (each against its own shuffled null), the best CV model is {vphrase(H1D)} on direction."
+    dtxt += f" Combining two or three vision networks, against the best single network: {vphrase(H9A)} (post-hoc)."
+    return [Pp(f"Seven vision models were compared on identical, leakage-controlled rows. {dtxt} For volatility and drawdown risk, simple numbers are the benchmark to beat: the best CV model is "
+               f"{vphrase(H1C, 'vol')} on volatility and {vphrase(H1C, 'dd')} on drawdown against the strongest numbers-only baseline. {interp} Multimodal results are in the third report.")]
+
+CV_SECTIONS = lambda: [
+    ("Abstract", [Pp(cv_abs)]),
+    ("1. Problem, gap and contribution", [Pp("Can a vision model read a candlestick chart well enough to forecast direction, volatility and drawdown risk, which "
+        "architecture does it best, do combinations help, and does the answer depend on the sector? Earlier work used one architecture, one timeframe or "
+        "few stocks; we compare seven architectures on identical leakage-controlled rows with three timeframes, four horizons and three targets, with "
+        "paired month-block bootstrap intervals and Holm correction, and test the validation choice once on 2024-2026."), *cv_contributions(), *common_front("cv"),
+        figp("research_design.png", "Research design: time blocks with 40-session purges (top) and the order of work from data to the post-hoc addenda (bottom).")]),
+    ("2. Images and preprocessing", [figp("chart_gallery.png", "Model inputs: weekly (52 candles), daily (63) and hourly (70) charts, 224 x 224, no text or axes."),
+        tbl(rtab("image_dataset.csv"), caption="Image dataset: rows, size and storage"), tbl(rtab("label_balance.csv"), max_rows=12, caption="Class balance and base rates by horizon and block"),
+        figp("eda_labels.png", "Class balance, drawdown base rates and volatility.")]),
+    ("3. Models and training", [cv_training_text(),
+        tbl(rtab("cv_lr_probe.csv"), caption="Learning-rate probe: a short run on a subsample of the training block for two candidate rates per model; the lower inner-block loss is kept"),
+        figp("cv_training_curves.png", "Training vs inner-block loss per epoch (early-stopping set).")]),
+    ("4. Validation results (selection)", [figp("cv_leaderboard_val.png", "Validation primary metrics; colour = rank within each task."),
+        tbl(rtab("cv_rank_val.csv"), caption="Mean validation rank over the 12 tasks (1 = best)"), Pp(mdtext("why_cv_best_val.md")),
+        tbl(rtab("cv_skill_val.csv"), ["task", "model", "skill", "lo", "hi", "p", "n"], caption="Validation skill of the best model per task (direction: over the shuffled null; volatility: R-squared; drawdown: AUC minus 0.5)"),
+        Pp("Combinations (equal-weight averages of calibrated outputs; nothing fitted):", H2s), tbl(rtab("cv_combo_rank_val.csv"), max_rows=12, caption="Best model combinations by mean validation rank"),
+        tbl(rtab("cv_best_per_task_val.csv"), caption="Best model per task on validation"), Pp("Sectors:", H2s), tbl(rtab("cv_best_by_sector_val.csv"), caption="Best CV model per sector and target (validation)"),
+        figp("cv_sector_interaction_val.png", "Sector x model interaction (centred metric) and permutation p-values."),
+        Pp("Ablations (1,000 bootstrap draws; with this many draws the smallest attainable Holm-corrected p-value is about 0.07 for 36-44 tests, so none can be called significant here):", H2s),
+        tbl(rtab("cv_ablations_val.csv"), ["comparison", "A", "target", "delta", "lo", "hi", "p_holm"], max_rows=44, caption="Ablations on validation, 1,000 draws (confirmatory run)"),
+        Pp("Post-hoc re-run of the same ablations with 5,000 bootstrap draws; only the precision of the p-values changes:", H2s),
+        tbl(rtab("cv_ablations_val_hiB.csv"), ["comparison", "A", "target", "delta", "lo", "hi", "p_holm"], max_rows=44, caption="Ablations on validation, 5,000 draws (post-hoc)"),
+        figp("cv_view_ablation.png", "Which timeframe carries the signal (frozen probes).")]),
+    ("5. Locked test results (2024-2026)", [
+        tbl(rtab("test_H1.csv"), ["task", "model", "skill", "lo", "hi", "p_holm", "supported"], caption="H1 (confirmatory): skill of the validation-chosen CV model over the uninformed benchmark"),
+        tbl(rtab("cv_rank_test.csv"), caption="Mean test rank of the fine-tuned CV models"), tbl(rtab("cv_best_per_target_test.csv"), caption="Validation choice, top-3 ensemble and the model that happened to be best on the test, per task"),
+        tbl(rtab("cv_combo_rank_test.csv"), max_rows=10, caption="Best model combinations on the locked test"),
+        tbl(rtab("test_H5.csv"), ["model", "target", "delta", "lo", "hi", "p_holm", "supported"], caption="H5 (confirmatory, 1,000 draws): fine-tuned minus frozen"),
+        tbl(rtab("test_H5_hiB.csv"), ["model", "target", "delta", "lo", "hi", "p_holm", "supported"], caption="H5 re-run with 5,000 draws (post-hoc precision check)"),
+        tbl(rtab("cv_best_by_sector_test.csv"), caption="Best CV model per sector and target on the locked test"), tbl(rtab("test_H6.csv"), caption="H6: sector x model interaction (permutation test)")]),
+    ("5a. Against the strongest numbers-only baseline (post-hoc)", [
+        Pp("The prior is a weak benchmark for volatility and drawdown. For every task the stronger of two numbers-only baselines was chosen on validation: <i>baseline_simple</i> "
+           "(momentum for direction, HAR regression for volatility, trailing-volatility logistic model for drawdown) or <i>tech_gbm</i> (LightGBM on 20 technical indicators). "
+           "The table gives the best CV model minus that baseline on the locked test."),
+        tbl(rtab("phase_a_baseline_choice.csv"), caption="Strongest numbers-only baseline per task (chosen on validation)"),
+        tbl(rtab("test_H1c.csv"), ["task", "A", "B", "delta", "lo", "hi", "p_holm", "verdict"], caption="H1c (post-hoc): best CV model minus strongest numbers-only baseline, paired month-block bootstrap, Holm"),
+        tbl(rtab("test_H1d.csv"), COLS_D, caption="H1d (post-hoc, the fair direction comparison): skill = macro-F1 minus the model's own within-month shuffled null; delta = CV skill minus baseline skill"),
+        tbl(rtab("test_H8b.csv"), ["task", "A", "B", "delta", "lo", "hi", "p_holm", "verdict"], caption="H8b (post-hoc): LightGBM on technical + CV features minus technical features alone"),
+        tbl(rtab("phase_a_panel_test.csv"), index=False, max_rows=12, caption="Primary test metric per task for the reference models (post-hoc)")]),
+    ("5b. Secondary metrics on the locked test (post-hoc)", secondary_section("cv")),
+    ("5c. Combinations of vision networks (post-hoc)", [Pp(combo_text("CV", H9A, "CV network")),
+        tbl(_cbs("CV"), ["size", "task", "best_combo", "val_primary", "test_primary"], max_rows=12 * 3, caption="Best combination of each size per task (chosen on validation) and its locked-test primary metric"),
+        tbl(rtab("test_H9a.csv"), COLS_V, caption="H9a (post-hoc): best combination of 1-3 CV networks minus the best single CV network, paired month-block bootstrap, Holm")]),
+    ("5d. Hypothesis register", [register_table(["CV", "CV+NLP"])]),
+    ("6. Error analysis, explainability, robustness, efficiency", [figp("cv_confusion_val.png", "Confusion matrices of the best CV model (validation)."),
+        figp("cv_errors_val.png", "Accuracy by volatility decile, sector, quarter and true class."), figp("cv_confident_errors_val.png", "Most confident wrong 20-day calls."),
+        figp("cv_gradcam.png", "Grad-CAM: sensitivity maps, not explanations of reasoning; coarse (7x7 / 14x14 cells)."),
+        tbl(rtab("cv_occlusion_val.csv"), max_rows=30, caption="Occlusion: metric change when a view or the most recent bars are hidden"),
+        tbl(rtab("cv_robustness_val.csv"), max_rows=24, caption="Robustness to noise, blur, JPEG compression, chart style and resizing"), tbl(rtab("cv_efficiency.csv"), caption="Parameters, compute and training time"),
+        figp("cv_efficiency.png", "Accuracy vs compute."), figp("yolo_detections.png", "The zero-shot YOLOv8 chart-pattern detector on our weekly charts."),
+        tbl(rtab("yolo_patterns_train.csv"), caption="Chart patterns detected by the zero-shot detector (training block)")]),
+    ("7. Discussion", cv_discussion()),
+    ("8. Threats to validity and limitations", [Pp("<b>Population.</b> Fifty large, surviving US stocks (survivorship bias); the original image-prediction literature found most signal in small caps. "
+        "<b>Time.</b> One decade with a 2022 bear market in validation and a strong 2024-2026 market in test (regime shift); the sideways band is volatility-scaled, which makes direction hard by design. "
+        "<b>Inputs.</b> Prices are not dividend-adjusted; charts are rebuilt from bars, so the models never saw real broker screenshots (the dashboard redraws them); each chart is min-max scaled, which "
+        "hides absolute volatility. <b>Training.</b> One seed per model, two-value learning-rate grids and short early-stopped training; the differences between close models are within seed noise. "
+        "<b>Inference.</b> Validation was used for many choices, so only the locked test numbers are unbiased; the post-hoc comparisons in section 5a were added after the test was opened and "
+        "should be read as exploratory. <b>Explanations.</b> Grad-CAM and occlusion show sensitivity, not causation."), future_work("cv")]),
+    ("8a. Ethics and data governance", ethics_items("cv")),
+    ("9. Conclusion", cv_conclusion()),
+    ("References", refs(["jkx", "he_resnet", "tan", "liu_convnext", "dosovitskiy", "liu_swin", "redmon", "jocher", "sezer", "ho", "corsi", "patton",
+                         "guo", "selvaraju", "hendrycks", "kunsch", "holm"])),
+]
+
+# %%
+# ================================================================ Report 2: NLP
+_nlp_ran = [NLPC[e]["label"] for e in NLPC if any(REG.get(m, {}).get("status") == "RUN" for m in (f"{e}_ft", f"{e}_frozen"))]
+_fg = "" if REG.get("fingpt_frozen", {}).get("status") == "RUN" else " FinGPT was not run: access to Meta's gated Llama-2 base model was not granted before the deadline."
+def _dir_count_text():
+    if not _ok(H2, "task", "supported"):
+        return ""
+    return f"direction {len(sig_tasks(H2, 'dir'))}/4, volatility {len(sig_tasks(H2, 'vol'))}/4, drawdown {len(sig_tasks(H2, 'dd'))}/4"
+_ef0 = _event_facts()
+nlp_event_lead = (f"Which SEC filings move prices? In a point-in-time event study on {len(TICKERS)} companies" +
+                  (f", filing days move prices {_ef0['ratio']:.1f} times as much as matched non-filing days on the locked test" if "ratio" in _ef0 else "") +
+                  (f"; by reaction size the forms rank {_ef0['rank']}" if "rank" in _ef0 else "") +
+                  (f"; the 8-K items with the largest reactions are {_ef0['items']} (development blocks)" if "items" in _ef0 else "") + ". " + hyp_line(H7, "H7 (event study)") + " ")
+nlp_abs = nlp_event_lead + (f"Can language models forecast the move? {len(_nlp_ran)} language models ({', '.join(_nlp_ran)}) and a TF-IDF baseline read the MD&A of "
+           f"10-K and 10-Q reports and the text of 8-K filings of {len(TICKERS)} companies (point-in-time EDGAR timestamps) and forecast direction, "
+           f"volatility and a >10 % drawdown from the first tradeable price after each filing. Validation-chosen best: {NLP_BEST}. " +
+           hyp_line(H2, "H2 (NLP skill on filing events)") + f" Tasks with supported skill: {_dir_count_text()}." +
+           f" Post-hoc, against the strongest no-text baseline on the same filings (per-company base rates, momentum/HAR/trailing volatility + form, or LightGBM on indicators + form, chosen on validation) "
+           f"the best NLP model per task is {vphrase(H2C_EV)}; for drawdown it is {vphrase(H2C_EV, 'dd')}. " + shortcut_text(short=True) + " "
+           "The test period starts after the pre-training cut-off of every language model, so no model can remember test-period news." + _fg)
+
+def nlp_training_text():
+    return Pp("Frozen: chunked (4 x 512 tokens; Longformer 4,096) mean-pooled embeddings, 32 principal components, "
+              "regularised linear heads. Fine-tuned: the same multi-task head as the CV models, AdamW, learning rate from a two-value probe, early stopping on "
+              "2021 filings (up to 3 epochs). FinGPT: Llama-2-7B + FinGPT LoRA in 4-bit, frozen embeddings plus its own sentiment read-out. " + best_epoch_text(NLP_MAIN))
+
+def _top_sector_text(df, tag):
+    if not _ok(df, "sector", "form", "excess_over_non_filing_days"):
+        return ""
+    parts = []
+    for f_, g in df.groupby("form"):
+        hi_, lo_ = g.loc[g["excess_over_non_filing_days"].idxmax()], g.loc[g["excess_over_non_filing_days"].idxmin()]
+        parts.append(f"{f_}: highest {hi_['sector']} ({hi_['excess_over_non_filing_days']:+.2f}), lowest {lo_['sector']} ({lo_['excess_over_non_filing_days']:+.2f})")
+    return f"{tag}: " + "; ".join(parts) + "."
+
+def nlp_discussion():
+    out = []
+    es = rtab("event_study_by_form_test.csv"); h7 = rtab("test_H7.csv")
+    if _ok(es, "group", "mean_abs_z"):
+        out.append(Pp("<b>Which report moves the market (Q6).</b> Mean absolute abnormal two-day move on the locked test, in normal-day units: " +
+                      ", ".join(f"{r.group} {r.mean_abs_z:.2f} (n={int(r.n)})" for r in es.itertuples()) + ". " +
+                      ("Filing days move more than matched non-filing days (Mann-Whitney p " + ("<0.001" if float(h7['p'].iloc[0]) < 0.001 else f"= {float(h7['p'].iloc[0]):.3f}") +
+                       ") and the forms differ (Kruskal-Wallis p " + ("<0.001" if float(h7['p'].iloc[1]) < 0.001 else f"= {float(h7['p'].iloc[1]):.3f}") + ")." if _ok(h7, "p") and len(h7) > 1 else "")))
+    out.append(Pp("<b>Which sectors (Q7, Q9).</b> " + _top_sector_text(rtab("event_study_sector_form_dev.csv"), "Development") + " " + _top_sector_text(rtab("event_study_sector_form_test.csv"), "Test") +
+                  " A sector is called more sensitive to a form when its excess reaction (mean |z| minus the same sector's non-filing days) is larger; agreement between the two periods is the evidence that the pattern is stable."))
+    it = rtab("event_study_8k_items_dev.csv"); wd = rtab("nlp_words_abs_z_dev.csv"); tn = rtab("nlp_tone_vs_reaction_dev.csv")
+    q8 = "<b>What in the reports (Q8).</b> "
+    if _ok(it, "item", "mean_abs_z"):
+        q8 += "8-K items with the largest reactions: " + ", ".join(f"{r.item} ({r.mean_abs_z:.2f})" for r in it.head(3).itertuples()) + ". "
+    if _ok(wd, "top_positive"):
+        q8 += "Phrases most associated with large reactions: " + ", ".join(str(x) for x in wd["top_positive"].head(6)) + "; most associated with small reactions: " + ", ".join(str(x) for x in wd["top_negative"].head(6)) + ". "
+    if _ok(tn, "form", "spearman_tone_vs_signed_AR"):
+        r_all = tn[tn["form"] == "all"]
+        if len(r_all):
+            q8 += f"FinBERT sentence tone is almost unrelated to the sign of the reaction (Spearman {float(r_all['spearman_tone_vs_signed_AR'].iloc[0]):+.3f}) and weakly related to its size ({float(r_all['spearman_tone_vs_abs_z'].iloc[0]):+.3f}). "
+    q8 += "Phrases that mark the filing type, the period (for example pandemic-era wording) or a company name are associations with the form, the time or the firm rather than with news; read the table with that in mind."
+    out.append(Pp(q8))
+    sd, sv, sk = sig_tasks(H2, "dir"), sig_tasks(H2, "vol"), sig_tasks(H2, "dd")
+    n_neg = int((H2[H2["task"].astype(str).str.startswith("vol")]["skill"] < 0).sum()) if _ok(H2, "task", "skill") else 0
+    out.append(Pp(f"<b>Can language models forecast from filings?</b> Against the uninformed benchmarks the validation-chosen NLP models have skill in {len(sd)} of 4 direction, {len(sv)} of 4 volatility and "
+                  f"{len(sk)} of 4 drawdown tasks on the locked test. For volatility the skill is negative (worse than predicting the training mean) in {n_neg} of 4 tasks"
+                  + (", which means that text alone does not track volatility regimes." if n_neg >= 2 else ".")))
+    out.append(Pp(f"<b>Is the drawdown signal only company identity? (post-hoc)</b> A filing tells the model which company wrote it, and a company's usual volatility predicts its drawdown risk. "
+                  f"Against the strongest no-text baseline on the same filings the best NLP model is {vphrase(H2C_EV, 'dd')} for drawdown, {vphrase(H2C_EV, 'vol')} for volatility and "
+                  f"{vphrase(H2C_EV, 'dir')} for direction. A drawdown gain over the prior that disappears against the per-company or numbers-only baseline would indicate that the text mostly identifies the company; "
+                  f"a gain that survives indicates information beyond identity. Judged fairly on direction (each model against its own shuffled null, H2d), the best NLP model is {vphrase(H2D)}."))
+    out.append(Pp("<b>Does text add to simple numbers on the daily panel? (post-hoc)</b> Technical + text features versus technical alone (H8c) is "
+                  f"{vphrase(H8C)}. " + text_vs_calendar_text()))
+    out.append(Pp("<b>Fine-tuned versus frozen, length and domain.</b> The 5,000-draw ablation table shows, per comparison, the mean difference on each target; "
+                  "reading chunked versus first-512-token inputs and fine-tuned versus frozen encoders there is more reliable than in the 1,000-draw table, whose smallest attainable "
+                  "Holm-corrected p-value (about 0.07) is above the 5 % level. " + best_epoch_text(NLP_MAIN)))
+    for s_ in (nlp_stability_text(), shortcut_text()):
+        if s_:
+            out.append(Pp(s_))
+    return out
+def nlp_conclusion():
+    es = rtab("event_study_by_form_test.csv"); ratio_txt = ""
+    if _ok(es, "group", "mean_abs_z"):
+        ctrl = es[es["group"].astype(str).str.startswith("no filing")]["mean_abs_z"]
+        fil = es[~es["group"].astype(str).str.startswith("no filing")]["mean_abs_z"]
+        if len(ctrl) and len(fil) and float(ctrl.iloc[0]) > 0:
+            _rk = _event_facts().get("rank")
+            ratio_txt = (f"The clearest NLP result is the event study: on the locked test, filing days move prices {float(fil.mean()) / float(ctrl.iloc[0]):.1f} times as much as matched non-filing days"
+                         + (f", the forms rank {_rk} by reaction size" if _rk else "") + ", and the reaction differs by sector. ")
+    bd = vcounts(H2C_EV, "dd")
+    interp = ""
+    if bd:
+        if bd[0] == 0:
+            interp = "The drawdown gain over the prior does not survive against the strongest no-text baseline, so it should not be read as information in the text beyond the company and simple numbers."
+        elif bd[0] == bd[3]:
+            interp = "The drawdown gain over the prior survives against the strongest no-text baseline in every task, which indicates information in the text beyond the company and simple numbers."
+        else:
+            interp = "The drawdown gain over the prior survives against the strongest no-text baseline in some tasks only."
+    return [Pp(f"{ratio_txt}Language-model forecasts of direction are supported in {len(sig_tasks(H2, 'dir'))} of 4 horizons, of volatility in {len(sig_tasks(H2, 'vol'))} of 4 and of drawdown risk in "
+               f"{len(sig_tasks(H2, 'dd'))} of 4 tasks over the uninformed benchmarks. Against the strongest no-text baseline the best NLP model is {vphrase(H2C_EV)} (drawdown: {vphrase(H2C_EV, 'dd')}). "
+               f"{interp} {text_vs_calendar_text()} {shortcut_text(short=True)} {h11_short()} Combining language models: the best combination versus the best single model is {vphrase(H9B)}. Comparisons between fine-tuned transformers and the TF-IDF baseline should be read with the confidence intervals, not the ranks.")]
+
+NLP_SECTIONS = lambda: [
+    ("Abstract", [Pp(nlp_abs)]),
+    ("1. Problem, gap and contribution", [Pp("Which SEC report moves prices, in which sectors, what in the text goes with the move, and can language models "
+        "forecast the next 5-40 sessions from it? We combine an event study (abnormal reaction vs matched non-filing days) with a controlled comparison "
+        "of transformer language models and a TF-IDF baseline on identical filings, evaluated on 2024-2026 after all selections were frozen."), *nlp_contributions(), *common_front("nlp"),
+        figp("research_design.png", "Research design: time blocks with 40-session purges (top) and the order of work from data to the post-hoc addenda (bottom).")]),
+    ("2. Filings and preprocessing", [tbl(rtab("sec_per_year.csv"), caption="Filings per year and form"), tbl(rtab("sec_per_sector.csv"), caption="Filings per sector and form"),
+        tbl(rtab("sec_text_stats.csv"), index=False, caption="Text length, MD&A extraction success and empty documents by form"),
+        figp("eda_sec.png", "Section lengths, acceptance timing and 8-K items."),
+        Pp("Acceptance time from the SGML header (quality A) or the later of two JSON readings; availability = acceptance + 35 minutes; entry at the first "
+           "hourly bar after availability. MD&A extraction for 10-K/10-Q (Exhibit 13 for banks), 8-K body + EX-99. Models read [form] [section] text.")]),
+    ("3. Event study (Q6, Q7, Q9)", [tbl(rtab("event_study_by_form_dev.csv"), caption="Reaction by form, development blocks (train + inner + validation); |z| = absolute abnormal 2-day move in normal-day units"),
+        tbl(rtab("event_study_by_form_test.csv"), caption="Reaction by form, locked test block"), tbl(rtab("test_H7.csv"), caption="H7: filing days move more than non-filing days; reaction size differs by form"),
+        figp("event_study_dev.png", "Reaction size by form, sector x form excess over non-filing days, 8-K items (development blocks)."),
+        tbl(rtab("event_study_sector_form_dev.csv"), max_rows=20, caption="Sector x form, development: mean |z|, number of filings, excess over the sector's non-filing days"),
+        tbl(rtab("event_study_sector_form_test.csv"), max_rows=20, caption="Sector x form, locked test"),
+        Pp(timing_text()),
+        tbl(rtab("event_study_timing_dev.csv"), max_rows=12, caption="Reaction by form and release time (pre-market, intraday, after the close), development blocks: mean |z| and number of filings"),
+        tbl(rtab("event_study_timing_test.csv"), max_rows=12, caption="Reaction by form and release time, locked test (post-hoc)")]),
+    ("4. Models, training and validation results", [nlp_training_text(),
+        tbl(rtab("nlp_lr_probe.csv"), caption="Learning-rate probe: two candidate rates per model, a short run on a subsample; the lower inner-block loss is kept"),
+        figp("nlp_training_curves.png", "Training vs inner loss."), figp("nlp_leaderboard_val.png", "Validation primary metrics."),
+        tbl(rtab("nlp_rank_val.csv"), caption="Mean validation rank over the 12 tasks (1 = best)"), Pp(mdtext("why_nlp_best_val.md")),
+        tbl(rtab("nlp_ablations_val.csv"), ["comparison", "A", "target", "delta", "lo", "hi", "p_holm"], max_rows=40, caption="Ablations on validation, 1,000 draws (confirmatory run; smallest attainable Holm p about 0.07)"),
+        tbl(rtab("nlp_ablations_val_hiB.csv"), ["comparison", "A", "target", "delta", "lo", "hi", "p_holm"], max_rows=40, caption="Ablations on validation, 5,000 draws (post-hoc precision check)")]),
+    ("5. Locked test results", [tbl(rtab("test_H2.csv"), ["task", "model", "skill", "lo", "hi", "p_holm", "supported"], caption="H2 (confirmatory): skill of the validation-chosen NLP model on filing events over the uninformed benchmark"),
+        tbl(rtab("nlp_rank_test.csv"), caption="Mean test rank of the NLP models"),
+        tbl(rtab("test_H2b.csv"), ["task", "model", "skill", "lo", "hi", "p_holm", "supported"], caption="H2b (confirmatory): the same models carried to the daily panel")]),
+    ("5a. Against no-text baselines on the same filings (post-hoc)", [
+        Pp("Three baselines see the same events but no text: <i>company_event</i> (each company's training-block base rates), <i>simple_event</i> (momentum, HAR, trailing volatility at the last close "
+           "before the filing, plus the form) and <i>tech_event</i> (LightGBM on 20 indicators plus the form). For every task the strongest was chosen on validation. A language model that only "
+           "recognises the company cannot beat <i>company_event</i>."),
+        tbl(rtab("phase_a_baseline_choice.csv"), caption="Strongest baseline per task (chosen on validation; event_baseline column applies here)"),
+        tbl(rtab("test_H2c_events.csv"), ["task", "A", "B", "delta", "lo", "hi", "p_holm", "verdict"], caption="H2c (post-hoc): best NLP model minus strongest no-text baseline on the locked test"),
+        tbl(rtab("test_H2d_events.csv"), COLS_D, caption="H2d (post-hoc, fair direction comparison): NLP skill minus baseline skill, each over its own within-month shuffled null"),
+        tbl(rtab("test_H8e.csv"), COLS_V, caption="H8e (post-hoc, daily panel): technical + text minus technical + filing-calendar columns (is it the words or the filing dates?)"),
+        tbl(rtab("test_H8f.csv"), COLS_V, caption="H8f (post-hoc, daily panel): technical + text minus technical + calendar + company one-hot (words beyond the company's identity)"),
+        tbl(rtab("phase_a_event_test.csv"), max_rows=14, caption="Primary test metric per task for the no-text baselines and the NLP models (post-hoc)"),
+        tbl(rtab("test_H8c.csv"), ["task", "A", "B", "delta", "lo", "hi", "p_holm", "verdict"], caption="H8c (post-hoc, daily panel): LightGBM on technical + NLP features minus technical features alone")]),
+    ("5b. Secondary metrics on the locked test (post-hoc)", secondary_section("nlp")),
+    ("5c. Combinations of language models (post-hoc)", [Pp(combo_text("NLP (filing events)", H9B, "language model")),
+        tbl(_cbs("NLP (filing events)"), ["size", "task", "best_combo", "val_primary", "test_primary"], max_rows=36, caption="Best combination of each size per task on filing events (chosen on validation) and its locked-test primary metric"),
+        tbl(rtab("test_H9b.csv"), COLS_V, caption="H9b (post-hoc): best combination of 1-3 language models minus the best single language model, filing events")]),
+    ("5d. Interpretable text features: text change and dictionary tone (post-hoc)", [Pp(text_features_text()),
+        tbl(rtab("text_features_corr.csv"), max_rows=24, caption="Spearman correlations of text features with the reaction (95 % month-block bootstrap intervals)"),
+        tbl(rtab("text_change_quintiles.csv"), caption="Mean |z| by quintile of text change (quintile cut-offs from development filings)"),
+        tbl(rtab("test_H10a.csv"), COLS_V, caption="H10a (post-hoc): no-text LightGBM + text change minus the no-text LightGBM, filing events"),
+        tbl(rtab("test_H10b.csv"), COLS_V, caption="H10b (post-hoc): no-text LightGBM + text change + Loughran-McDonald tone minus the no-text LightGBM")]),
+    ("5e. Do the words explain the size of the reaction? (post-hoc)", [Pp(h11_text()),
+        tbl(rtab("test_H11.csv"), ["A", "B", "r2_A", "r2_B", "delta", "lo", "hi", "p_holm", "verdict", "n"], caption="H11: ridge regression of log(1 + |z|) on the locked test; metadata = form, sector, 8-K items, release time; company = one-hot of the filer")]),
+    ("5f. Hypothesis register", [register_table(["NLP", "CV+NLP"])]),
+    ("6. What in the filings goes with the move (Q8)", [tbl(rtab("event_study_8k_items_dev.csv"), caption="8-K items ranked by mean |z| (development blocks)"),
+        tbl(rtab("event_study_8k_items_test.csv"), caption="8-K items on the locked test"),
+        tbl(rtab("nlp_words_abs_z_dev.csv"), max_rows=15, caption="n-grams most associated with the SIZE of the reaction (ridge coefficients, TF-IDF)"),
+        tbl(rtab("nlp_words_ar2_dev.csv"), max_rows=15, caption="n-grams most associated with the SIGN of the reaction (positive / negative abnormal return)"),
+        tbl(rtab("nlp_tone_vs_reaction_dev.csv"), caption="FinBERT sentence tone vs the reaction (Spearman correlations)"),
+        tbl(rtab("nlp_integrated_gradients_val.csv"), caption="Tokens that raise the output most (integrated gradients), largest-reaction validation filings; many are dates, company names and formatting tokens"),
+        Pp("These are associations inside the sample; boilerplate phrases can mark filing types, periods or companies rather than news.")]),
+    ("7. Errors and efficiency", [figp("nlp_errors_val.png", "Accuracy by form, sector, timing and length; confusion matrix."), tbl(rtab("nlp_efficiency.csv"), caption="Parameters, context length, training and inference speed")]),
+    ("8. Discussion", nlp_discussion()),
+    ("9. Threats to validity and limitations", [Pp("<b>Sample.</b> Only 50 large companies, so a few thousand filings; the model ranks between close competitors are not reliable. <b>Text.</b> MD&A extraction "
+        "is heuristic (fallback to full text is reported); 512-token models read only the beginning of long sections; filings reveal the company, so company identity can masquerade as content "
+        "(addressed post-hoc in section 5a). <b>Models.</b> FinGPT is used frozen; one seed per model; two-value learning-rate grids; short early-stopped fine-tuning. <b>Events.</b> Reactions mix the "
+        "filing with same-day news; survivorship bias. <b>Inference.</b> Only the locked test numbers are unbiased; sections 5a-5e were added after the test was opened and are exploratory."),
+        future_work("nlp")]),
+    ("9a. Ethics and data governance", ethics_items("nlp")),
+    ("10. Conclusion", nlp_conclusion()),
+    ("References", refs(["araci", "huang", "loukas", "liu_roberta", "beltagy", "he_deberta", "yang", "touvron", "dettmers", "hu", "loughran11", "loughran16",
+                         "tetlock", "cohen", "ke", "lerman", "glasserman", "sarkar", "sundararajan", "kunsch", "holm", "geirhos", "mosbach", "dodge", "lopezlira"])),
+]
+
+# %%
+# ================================================================ Report 3: Multimodal
+def answers_text():
+    out = []
+    def clean(s):
+        return html.escape(str(s).replace("**", ""), quote=False)
+    q1 = clean(ANSWERS['Q1']).replace("See q1_answers_test.csv: '*' marks Holm-significant skill on the locked test block. ", "")
+    out.append(Pp(f"<b>Q1. Can CV, NLP or CV+NLP predict UP / SIDEWAYS / DOWN at 5-40 days?</b> {q1} The per-task table is in section 3. Post-hoc, against the strongest numbers-only baseline: "
+                  f"best CV model {vphrase(H1C)}; best NLP model (panel) {vphrase(H2C_PANEL)}; best fusion {vphrase(H3C)}. For direction, judged fairly (each model against its own shuffled null): "
+                  f"CV {vphrase(H1D)}; NLP on filing events {vphrase(H2D)}."))
+    out.append(Pp(f"<b>Q2. Best CV model.</b> {clean(ANSWERS['Q2'])}"))
+    cr = rtab("cv_combo_rank_test.csv")
+    if _ok(cr, "combo", "mean_rank_test"):
+        k = int((cr["combo"] == BEST_COMBO).argmax()) + 1 if BEST_COMBO in set(cr["combo"]) else None
+        out.append(Pp(f"<b>Q3. Best CV combination.</b> The best combination on validation was {BEST_COMBO}; it ranks {k if k else 'n/a'} of {len(cr)} on the locked test. "
+                      f"The three best combinations on the test were " + ", ".join(f"{r.combo} (mean rank {r.mean_rank_test:.1f})" for r in cr.head(3).itertuples()) +
+                      ". A combination that is a single model means that no averaged ensemble beat the best single network on validation."))
+    bt = rtab("cv_best_per_target_test.csv")
+    if _ok(bt, "task", "val_choice", "test_best_ex_post"):
+        same = int((bt["val_choice"] == bt["test_best_ex_post"]).sum())
+        out.append(Pp(f"<b>Q4. Best model per target.</b> Table 'best model per task' lists the validation choice and its test score for direction, volatility and drawdown at each horizon. "
+                      f"The validation choice was also the best on the test in {same} of {len(bt)} tasks; the top-3 ensemble is the more reliable choice when validation and test regimes differ."))
+    sec = rtab("cv_best_by_sector_test.csv")
+    h6 = ", ".join(f"{r.target}: p = {('<0.001' if r.p < 0.001 else f'{r.p:.3f}')}" for r in H6.itertuples()) if _ok(H6, "target", "p") else "not run"
+    out.append(Pp(f"<b>Q5. Best model per sector; sector-specific networks?</b> The best model per sector and target is in the sector table. The interaction test (do rankings change by sector?) gives {h6}; "
+                  f"a small p-value means the best network depends on the sector for that target."))
+    es = rtab("event_study_by_form_test.csv")
+    if _ok(es, "group", "mean_abs_z"):
+        forms_ = es[~es["group"].astype(str).str.startswith("no filing")].sort_values("mean_abs_z", ascending=False)
+        top_item = rtab("event_study_8k_items_dev.csv")
+        item_txt = f" Among 8-K items the largest reaction is item {top_item['item'].iloc[0]} (mean |z| {float(top_item['mean_abs_z'].iloc[0]):.2f}, development blocks)." if _ok(top_item, "item", "mean_abs_z") else ""
+        out.append(Pp("<b>Q6. Which report moves the market more?</b> Mean |z| on the test: " + ", ".join(f"{r.group} {r.mean_abs_z:.2f}" for r in es.itertuples()) +
+                      f". By reaction size the forms rank: {' > '.join(str(g) for g in forms_['group'])}." + item_txt))
+    out.append(Pp("<b>Q7 and Q9. Which sectors are sensitive to which report?</b> " + _top_sector_text(rtab("event_study_sector_form_dev.csv"), "Development") + " " +
+                  _top_sector_text(rtab("event_study_sector_form_test.csv"), "Test")))
+    it = rtab("event_study_8k_items_dev.csv"); wd = rtab("nlp_words_abs_z_dev.csv")
+    q8 = "<b>Q8. What in the reports moves the market?</b> "
+    if _ok(it, "item", "mean_abs_z"):
+        q8 += "8-K items by reaction: " + ", ".join(f"{r.item} ({r.mean_abs_z:.2f})" for r in it.head(3).itertuples()) + ". "
+    if _ok(wd, "top_positive"):
+        q8 += "Phrases associated with large reactions: " + ", ".join(str(x) for x in wd["top_positive"].head(6)) + ". "
+    q8 += "Sentence tone has almost no relation to the sign of the reaction; many top phrases mark the form, the period or the company."
+    out.append(Pp(q8))
+    wfile = SUB["results"] / "fusion_weights.json"
+    wdir = ""
+    if wfile.exists():
+        wl = json.loads(wfile.read_text()).get("late_top3", {})
+        dirw = [wl.get(f"dir_{h}") for h in HORIZONS]
+        if dirw and all(w is not None for w in dirw) and all(float(w) == 1.0 for w in dirw):
+            wdir = " For direction, validation assigned all weight to the charts in late fusion (so fusion and charts give identical direction predictions and the difference is exactly zero): text received zero weight."
+    out.append(Pp(f"<b>Q10. Does combining the top-3 CV and top-3 NLP models add edge?</b> {clean(ANSWERS['Q10'])} By target: volatility {len(sig_tasks(H4, 'vol'))} of 4, "
+                  f"drawdown {len(sig_tasks(H4, 'dd'))} of 4, direction {len(sig_tasks(H4, 'dir'))} of 4." + wdir +
+                  f" Post-hoc, adding CV and NLP features to the technical LightGBM: both {vphrase(H8)}; CV only {vphrase(H8B)}; NLP only {vphrase(H8C)}."))
+    return out
+
+def mm_discussion():
+    out = []
+    fw = SUB["results"] / "fusion_weights.json"
+    wtxt = ""
+    if fw.exists():
+        wd_ = json.loads(fw.read_text()).get("late_top3", {})
+        if wd_:
+            wtxt = " Validation weights on the CV side (1 = charts only, 0 = text only), late top-3 fusion: " + ", ".join(f"{k}: {v:.2f}" for k, v in wd_.items()) + "."
+    out.append(Pp(f"<b>Does fusion help?</b> Fusion beats the better single modality in {int(H3['supported'].sum()) if _ok(H3, 'supported') else 0} of {len(H3) if _ok(H3, 'supported') else 0} tasks (H3) and "
+                  f"top-3 CV + top-3 NLP beats top-3 CV in {int(H4['supported'].sum()) if _ok(H4, 'supported') else 0} of {len(H4) if _ok(H4, 'supported') else 0} (H4). By target, H3 is supported for "
+                  f"direction in {len(sig_tasks(H3, 'dir'))} of 4 tasks, volatility {len(sig_tasks(H3, 'vol'))} of 4 and drawdown {len(sig_tasks(H3, 'dd'))} of 4." + wtxt))
+    out.append(Pp(f"<b>Is the gain real once simple numbers are present? (post-hoc)</b> The fairest comparison keeps the learner fixed and adds features. Technical + CV + NLP features versus technical features alone: "
+                  f"{vphrase(H8)} (direction: {vphrase(H8, 'dir')}; volatility: {vphrase(H8, 'vol')}; drawdown: {vphrase(H8, 'dd')}). Adding only CV features: {vphrase(H8B)}. "
+                  f"Adding only NLP features: {vphrase(H8C)}. A gain here is information that charts or filings contain beyond the numbers; no gain means the late-fusion improvements above come from "
+                  f"the CV and NLP models re-learning what the numbers already say. " + text_vs_calendar_text()))
+    out.append(Pp(f"<b>Direction, compared fairly (post-hoc).</b> The numbers-only baselines predict mostly one class, which macro-F1 punishes, so raw macro-F1 differences flatter the "
+                  f"image and text models. With every model judged against its own within-month shuffled null, the best CV model versus the strongest numbers-only baseline is {vphrase(H1D)} "
+                  f"and the best NLP model versus the strongest no-text baseline on filing events is {vphrase(H2D)}."))
+    mct = rtab("mc_calibration_test.csv"); mc_txt = ""
+    if _ok(mct, "coverage80", "coverage90"):
+        mc_txt = (f" In the confirmatory run the nominal 80 % / 90 % Monte Carlo ranges contained the realised 20-day return {100 * float(mct['coverage80'].iloc[0]):.0f} % / "
+                  f"{100 * float(mct['coverage90'].iloc[0]):.0f} % of the time on the test; a single volatility scale chosen on validation is evaluated post-hoc below.")
+    out.append(Pp("<b>Dashboard.</b> The recipe (top-3 CV ensemble, blended with top-3 deployable NLP models when a filing is fresh) is parity-tested against the notebook. Its skill on the locked test and the "
+                  "per-task no-call rule are in section 5." + mc_txt))
+    if _ok(MC_TEST_SCALED, "coverage80"):
+        r = MC_TEST_SCALED.iloc[0]
+        out.append(Pp(f"With the volatility scale {r['scale']:.2f} chosen on validation, the nominal 80 % / 90 % ranges contain the realised 20-day return {100 * float(r['coverage80']):.0f} % / {100 * float(r['coverage90']):.0f} % of the time on the test."))
+    return out
+def mm_conclusion():
+    return [Pp(f"Charts and filing text were compared alone and combined on identical rows. On the locked test the best CV model is supported over the uninformed benchmark in "
+               f"{len(sig_tasks(H1, 'dir'))} of 4 direction, {len(sig_tasks(H1, 'vol'))} of 4 volatility and {len(sig_tasks(H1, 'dd'))} of 4 drawdown tasks; the best NLP model (filings) in "
+               f"{len(sig_tasks(H2, 'dir'))}, {len(sig_tasks(H2, 'vol'))} and {len(sig_tasks(H2, 'dd'))}; fusion beats the better single modality in {len(sig_tasks(H3, 'dir')) + len(sig_tasks(H3, 'vol')) + len(sig_tasks(H3, 'dd'))} of 12 tasks. "
+               f"The post-hoc incremental test (technical features with CV and NLP features versus technical features alone) is {vphrase(H8)}; this measures what the chart and filing features add beyond technical indicators, "
+               f"and the calendar control separates the filing dates from the words. {text_vs_calendar_text()} Compared fairly on direction, the best CV model versus the numbers-only baseline is {vphrase(H1D)}. The dashboard {deploy_dd_text()}. It withholds direction calls where the test does not support them and is a "
+               f"decision-support illustration, not a trading system. Combining networks (post-hoc): within vision {vphrase(H9A)}; within language {vphrase(H9B)}; "
+               f"a language-model combination added to a vision combination {vphrase(H9C)}, against the best vision combination alone.")]
+
+mm_abs = ("Charts and filing text are aligned on identical decision rows (latest filing known at each close) and combined by late fusion (top-3 + top-3, "
+          "best + best, weights chosen on validation) and early feature fusion. " + hyp_line(H3, "H3 (fusion beats the better single modality)") + " " +
+          hyp_line(H4, "H4 / Q10 (top-3 CV + top-3 NLP beats top-3 CV)") +
+          f" Post-hoc, adding CV and NLP features to a LightGBM on technical indicators is {vphrase(H8)} (H8). The dashboard recipe, its no-call rule and the Monte Carlo simulator "
+          "are evaluated by the same rules.")
+MM_SECTIONS = lambda: [
+    ("Abstract", [Pp(mm_abs)]),
+    ("1. Answers to the ten project questions (locked test)", [*answers_text(), tbl(rtab("hypotheses_test.csv"), caption="Hypothesis families (confirmatory): number of Holm-corrected tests supported on the locked test"),
+        tbl(rtab("hypotheses_phase_a.csv"), caption="Post-hoc comparison families: verdicts against the strongest numbers-only baseline and the incremental-value tests"),
+        register_table(None)]),
+    ("2. Design", [*common_front("mm"), figp("research_design.png", "Research design: time blocks with 40-session purges (top) and the order of work from data to the post-hoc addenda (bottom)."), tbl(rtab("panel_text_coverage.csv"), caption="Share of decision rows with a periodic filing in the last 90 sessions, an 8-K in the last 20, and fresh text (within 5 sessions)"),
+        Pp("Fusion candidates: late fusion of calibrated probabilities (weights 0-1 in steps of 0.25 per task, chosen on validation), early fusion "
+           "(linear heads on frozen CV + frozen NLP features), and a technical-indicator reference (LightGBM on technical + CV + NLP features).")]),
+    ("3. Q1: CV vs NLP vs CV+NLP", [tbl(rtab("q1_answers_test.csv"), max_rows=12, caption="Q1 per task: skill of the best CV model, best NLP model (events and panel) and the fusion gain; * = supported after Holm"),
+        tbl(rtab("q1_test.csv"), max_rows=40, caption="Primary test metric by role, all decision rows"),
+        tbl(rtab("q1_test_fresh.csv"), max_rows=40, caption="Primary test metric by role, only rows with fresh text (a filing within 5 sessions)")]),
+    ("4. Q10, H3 and the incremental-value tests", [
+        tbl(rtab("test_H4.csv"), ["task", "delta", "lo", "hi", "p_holm", "supported"], caption="H4 / Q10: top-3 CV + top-3 NLP minus top-3 CV"),
+        tbl(rtab("test_H3.csv"), ["task", "A", "B", "delta", "lo", "hi", "p_holm"], caption="H3: best fusion minus the better single modality"),
+        tbl(rtab("q10_val.csv"), ["task", "delta", "lo", "hi", "p_holm"], caption="Q10 on validation"),
+        tbl(rtab("fusion_leaderboard_test.csv"), ["model", "task", "primary"], max_rows=40, caption="Fusion and reference models on the locked test"),
+        tbl(rtab("test_H3c.csv"), ["task", "A", "B", "delta", "lo", "hi", "p_holm", "verdict"], caption="H3c (post-hoc): best fusion minus strongest numbers-only baseline"),
+        tbl(rtab("test_H8.csv"), ["task", "A", "B", "delta", "lo", "hi", "p_holm", "verdict"], caption="H8 (post-hoc): LightGBM on technical + CV + NLP features minus technical features alone"),
+        tbl(rtab("test_H8b.csv"), ["task", "A", "B", "delta", "lo", "hi", "p_holm", "verdict"], caption="H8b (post-hoc): technical + CV minus technical alone"),
+        tbl(rtab("test_H8c.csv"), ["task", "A", "B", "delta", "lo", "hi", "p_holm", "verdict"], caption="H8c (post-hoc): technical + NLP minus technical alone"),
+        tbl(rtab("test_H8d.csv"), COLS_V, caption="H8d (post-hoc): technical + filing-calendar columns minus technical alone (do the filing dates alone help?)"),
+        tbl(rtab("test_H8e.csv"), COLS_V, caption="H8e (post-hoc): technical + text minus technical + filing calendar (the content of the text)"),
+        tbl(rtab("test_H8f.csv"), COLS_V, caption="H8f (post-hoc): technical + text minus technical + calendar + company one-hot (text beyond the company's identity)"),
+        tbl(rtab("test_H1d.csv"), COLS_D, caption="H1d (post-hoc): direction skill of the best CV model minus that of the strongest numbers-only baseline, each over its own shuffled null"),
+        tbl(rtab("phase_a_panel_test.csv"), max_rows=12, caption="Primary test metric per task for the reference models (post-hoc)")]),
+    ("4b. Combinations of combinations: 1-3 vision networks x 0-3 language models (post-hoc)", [Pp(grid_text()),
+        figp("combo_grid_test.png", "Mean locked-test primary metric over the four horizons, by number of vision networks (rows) and language models (columns) in the validation-chosen combination."),
+        tbl(rtab("combo_grid_summary.csv"), max_rows=40, caption="Mean validation and test primary metric by target and combination size"),
+        tbl(_sel_mm(), ["task", "members", "size", "w_cv"], max_rows=12, caption="Combination chosen on validation per task (CV members | NLP members; w_cv = weight on the CV side)"),
+        tbl(rtab("test_H9c.csv"), COLS_V, caption="H9c (post-hoc): best CV + NLP combination minus best CV combination"),
+        tbl(rtab("test_H9d.csv"), COLS_V, caption="H9d (post-hoc): best CV + NLP combination minus the strongest numbers-only baseline")]),
+    ("5. The dashboard recipe and Monte Carlo", [tbl(rtab("test_deploy.csv"), ["task", "skill", "lo", "hi", "p_holm", "supported"], caption="Dashboard recipe: skill on the locked test over the uninformed benchmark"),
+        Pp("No-call rule: " + ", ".join(f"{k}: {'NO CALL' if v else 'call shown'}" for k, v in NO_CALL.items()) + "."),
+        tbl(rtab("mc_calibration_val.csv"), caption="Monte Carlo tail thickness nu chosen on validation (target coverage 80 % and 90 %)"),
+        tbl(rtab("mc_calibration_test.csv"), caption="Monte Carlo coverage on the locked test (confirmatory)"),
+        tbl(rtab("mc_scale_val.csv"), caption="Post-hoc: volatility scale factor chosen on validation"),
+        tbl(rtab("mc_calibration_test_scaled.csv"), caption="Post-hoc: Monte Carlo coverage on the locked test with the chosen scale"),
+        figp("mc_example_val.png", "Monte Carlo example."), figp("deploy_confusion_test.png", "Dashboard recipe: confusion matrices on the test block."),
+        tbl(rtab("dashboard_parity.csv"), caption="Parity: the dashboard engine reproduces the notebook's predictions (maximum absolute differences)")]),
+    ("6. Reproducibility", [Pp(f"Freeze manifest: {len(FREEZE['prediction_files'])} prediction files hashed at the original freeze; selections {FREEZE['selections_sha256']}; core code "
+        f"{FREEZE['core_sha256'][:16]}; packages {json.dumps(FREEZE['packages'])}. Predictions are recomputed deterministically; the check below compares the confirmatory tables of this execution with "
+        f"the archived first run."),
+        tbl(rtab("phase_a_repro_check.csv"), caption="Reproducibility check: confirmatory tables of this execution against the archived first run"),
+        tbl(pd.DataFrame([{"section": k, "minutes": v} for k, v in TIMER.items() if k != "_t0"]), caption="Runtime by section of this execution (resumed stages are fast)")]),
+    ("7. Discussion", mm_discussion()),
+    ("8. Limitations and what would change the conclusions", [Pp("A stronger universe (delisted firms, small caps), a longer test, intraday text timing (news), alternative chart encodings and "
+        "more training seeds could change the answers. Validation-chosen weights can still over-fit validation: only the locked test numbers are unbiased, and the post-hoc comparisons were added after "
+        "the test was opened. Survivorship, a single data vendor lineage and cost-free evaluation are stated limits.")]),
+    ("8a. Ethics and data governance", ethics_items("mm")),
+    ("9. Conclusion", mm_conclusion()),
+    ("10. Future work: the pre-registered v3.1 protocol", protocol_items()),
+    ("References", refs(["baltrusaitis", "jkx", "loughran16", "glasserman", "sarkar", "guo", "kunsch", "holm", "mosbach", "cohen", "loughran11"])),
+]
+
+# %%
+REPORT_FILES = []
+for fname, title, sections in [("NEXUS_Alpha_v3_Computer_Vision_Report.pdf", "NEXUS Alpha v3 - Computer Vision Report", CV_SECTIONS),
+                               ("NEXUS_Alpha_v3_NLP_Report.pdf", "NEXUS Alpha v3 - NLP Report (SEC filings)", NLP_SECTIONS),
+                               ("NEXUS_Alpha_v3_Multimodal_Report.pdf", "NEXUS Alpha v3 - Multimodal (CV + NLP) Report", MM_SECTIONS)]:
+    try:
+        REPORT_FILES.append(build_pdf(SUB["reports"] / fname, title, sections)); print("wrote", fname)
+    except Exception as e:
+        failed(f"report_{fname}", e)
+ZIP_OUT = SUB["reports"] / f"NEXUS_Alpha_v3_{RUN_MODE.lower()}_results.zip"
+with zipfile.ZipFile(ZIP_OUT, "w", zipfile.ZIP_DEFLATED) as z:
+    for folder in ("reports", "tables", "figures", "results"):
+        for p_ in SUB[folder].glob("*"):
+            if p_.is_file() and p_ != ZIP_OUT:
+                z.write(p_, f"{folder}/{p_.name}")
+print("Results ZIP:", ZIP_OUT)
+if IN_COLAB:
+    from google.colab import files as _files
+    for p_ in REPORT_FILES:
+        try:
+            _files.download(str(p_))
+        except Exception:
+            pass
+tick("25 reports")

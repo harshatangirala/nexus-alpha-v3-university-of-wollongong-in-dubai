@@ -1,0 +1,6 @@
+sector,dd,dir,vol
+Communication Services,longformer_ft,secbert_ft,finbert_ft
+Consumer Discretionary,longformer_ft,secbert_ft,finbert_ft
+Financials,longformer_ft,secbert_ft,finbert_ft
+Health Care,tfidf_lr,secbert_ft,fingpt_frozen
+Information Technology,tfidf_lr,tfidf_lr,tfidf_lr

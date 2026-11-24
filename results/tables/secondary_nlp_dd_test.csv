@@ -1,0 +1,21 @@
+role,model,task,auc,pr_auc,bss,ece,base_rate
+uninformed prior,prior_event,dd_5,0.5,0.0807,-0.0237,0.0313,0.043
+no-text baseline,tech_event,dd_5,0.7097,0.1016,-0.0088,0.0302,0.043
+company base rates,company_event,dd_5,0.5537,0.0894,-0.0202,0.0315,0.043
+best NLP model (validation),longformer_ft,dd_5,0.6514,0.1281,-0.0158,0.0325,0.043
+TF-IDF baseline,tfidf_lr,dd_5,0.6167,0.0625,-0.0255,0.0334,0.043
+uninformed prior,prior_event,dd_10,0.5,0.1229,-0.0269,0.0476,0.0904
+no-text baseline,simple_event,dd_10,0.676,0.1712,-0.0044,0.0425,0.0904
+company base rates,company_event,dd_10,0.5811,0.1317,-0.0173,0.0481,0.0904
+best NLP model (validation),longformer_ft,dd_10,0.6123,0.162,-0.0133,0.0513,0.0904
+TF-IDF baseline,tfidf_lr,dd_10,0.5835,0.1159,-0.0262,0.0507,0.0904
+uninformed prior,prior_event,dd_20,0.5,0.2055,-0.044,0.0843,0.1752
+no-text baseline,simple_event,dd_20,0.6437,0.2696,-0.0053,0.0742,0.1752
+company base rates,company_event,dd_20,0.5748,0.2533,-0.0268,0.0855,0.1752
+best NLP model (validation),longformer_ft,dd_20,0.6393,0.321,-0.0201,0.0874,0.1752
+TF-IDF baseline,tfidf_lr,dd_20,0.5848,0.2143,-0.0421,0.0857,0.1752
+uninformed prior,prior_event,dd_40,0.5,0.3302,-0.0421,0.1104,0.3027
+no-text baseline,simple_event,dd_40,0.6157,0.3908,-0.0165,0.1039,0.3027
+company base rates,company_event,dd_40,0.5538,0.354,-0.036,0.1128,0.3027
+best NLP model (validation),longformer_ft,dd_40,0.6279,0.4455,-0.0239,0.1116,0.3027
+TF-IDF baseline,tfidf_lr,dd_40,0.5669,0.3445,-0.0399,0.1137,0.3027

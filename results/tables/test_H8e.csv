@@ -1,0 +1,13 @@
+family,task,A,B,n,delta,lo,hi,p,p_holm,supported,verdict
+H8e technical + text vs technical + filing calendar (text content),dir_5,fusion_tech_nlp,fusion_tech_cal,6550,0.0,0.0,0.0,1.0,1.0,False,no clear difference
+H8e technical + text vs technical + filing calendar (text content),dir_10,fusion_tech_nlp,fusion_tech_cal,6550,0.01995073055336613,0.009221267139242406,0.032750241612014064,0.001998001998001998,0.023976023976023976,True,better
+H8e technical + text vs technical + filing calendar (text content),dir_20,fusion_tech_nlp,fusion_tech_cal,6550,-0.03913559840478134,-0.050049843180977736,-0.02803431137200612,0.001998001998001998,0.023976023976023976,False,worse
+H8e technical + text vs technical + filing calendar (text content),dir_40,fusion_tech_nlp,fusion_tech_cal,6550,-0.015487736540238717,-0.024897425990001498,-0.005416350645734136,0.005994005994005994,0.04195804195804196,False,worse
+H8e technical + text vs technical + filing calendar (text content),vol_5,fusion_tech_nlp,fusion_tech_cal,6550,0.01527018979543393,0.009994689559494733,0.022239775715853182,0.001998001998001998,0.023976023976023976,True,better
+H8e technical + text vs technical + filing calendar (text content),vol_10,fusion_tech_nlp,fusion_tech_cal,6550,0.011018969901744113,0.0022700193418138032,0.01909092102205195,0.013986013986013986,0.08391608391608392,False,no clear difference
+H8e technical + text vs technical + filing calendar (text content),vol_20,fusion_tech_nlp,fusion_tech_cal,6550,0.013113376484662487,0.005771747563334759,0.022213571422614053,0.001998001998001998,0.023976023976023976,True,better
+H8e technical + text vs technical + filing calendar (text content),vol_40,fusion_tech_nlp,fusion_tech_cal,6550,0.011604045234412497,-0.006735224961580002,0.030969129723873886,0.1838161838161838,0.7352647352647352,False,no clear difference
+H8e technical + text vs technical + filing calendar (text content),dd_5,fusion_tech_nlp,fusion_tech_cal,6550,-0.0199904351005884,-0.04212202094666064,0.0036839742613681576,0.10589410589410589,0.5294705294705294,False,no clear difference
+H8e technical + text vs technical + filing calendar (text content),dd_10,fusion_tech_nlp,fusion_tech_cal,6550,0.003926048367238755,-0.009645028846425116,0.01520718324954544,0.5594405594405595,1.0,False,no clear difference
+H8e technical + text vs technical + filing calendar (text content),dd_20,fusion_tech_nlp,fusion_tech_cal,6550,0.0024958997558827134,-0.010689103323673305,0.016137909067099523,0.7092907092907093,1.0,False,no clear difference
+H8e technical + text vs technical + filing calendar (text content),dd_40,fusion_tech_nlp,fusion_tech_cal,6550,-0.034922805806853585,-0.04798047333659029,-0.0218342729855723,0.001998001998001998,0.023976023976023976,False,worse

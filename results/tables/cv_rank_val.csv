@@ -1,0 +1,8 @@
+model,mean_rank
+vit_b16_ft,2.1666666666666665
+swin_t_ft,2.75
+resnet50_ft,3.75
+convnext_t_ft,4.333333333333333
+effnet_b0_ft,4.583333333333333
+yolov8_cls_ft,5.083333333333333
+jkx_cnn_ft,5.333333333333333

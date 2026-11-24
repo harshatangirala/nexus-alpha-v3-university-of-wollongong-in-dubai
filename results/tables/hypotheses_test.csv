@@ -1,0 +1,9 @@
+family,tests,supported,verdict
+H1 CV has skill,12,6,partly supported
+H2 NLP has skill (events),12,4,partly supported
+H2b NLP has skill (panel),12,4,partly supported
+H3 fusion beats the better single modality,12,6,partly supported
+H4 top-3 + top-3 beats top-3 CV,12,3,partly supported
+H5 fine-tuning beats frozen,18,9,partly supported
+H6 sector-specific rankings,3,2,partly supported
+H7 filings move prices,2,2,supported

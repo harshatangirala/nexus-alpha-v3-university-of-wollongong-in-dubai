@@ -1,0 +1,289 @@
+# %% [markdown]
+## 3. Universe, data provenance, SEC availability check and price bars
+
+**Price data.** `nav3_bars_66.zip` holds TriFrame's frozen tier-A bars (`final/`, frozen 2026-10-11, data through 2026-10-09) for the 50 study stocks and 16 same-sector reserves, plus SPY daily. Source chain: a Finnhub-derived 1-minute feed cleaned and aggregated to regular-hours hourly bars (09:30-aligned, 7 per session), daily and weekly bars; Yahoo gap fills and the March-October 2026 extension from Yahoo daily and hourly bars. Prices are **split-adjusted, not dividend-adjusted**. TriFrame verified the store against Yahoo (daily close s.d. 0.24 %, hourly 0.04 %) and the NYSE calendar (0 missing sessions). This cell re-checks every file's SHA-256 against the manifest pinned in §2; the notebook never substitutes other price data.
+
+**SEC availability rule (fixed before any download of text).** A study stock is kept if EDGAR lists, between 2016-01-01 and the data end, at least 8 10-K, 20 10-Q and 10 8-K original filings. Otherwise it is replaced by the first reserve of its sector that passes. Every decision is printed and saved.
+
+# %%
+BARS_DIR = LOCAL_ROOT / "bars"
+def stage_bars_zip():
+    zp = DATA_DIR / DATA_ZIP_NAME
+    if not zp.exists():                      # 1) look elsewhere in Drive, 2) ask for an upload (Colab)
+        hits = []
+        for root in (DRIVE_ROOT.parent, DRIVE_ROOT.parent.parent):
+            hits = list(root.glob(f"**/{DATA_ZIP_NAME}"))[:1] if root.exists() else []
+            if hits:
+                break
+        if hits:
+            print("Found the data package at", hits[0]); shutil.copy(hits[0], zp)
+        elif IN_COLAB:
+            from google.colab import files as _up
+            print(f"{DATA_ZIP_NAME} not found in Drive. Choose it in the dialog below (107 MB, from your Downloads folder):")
+            up = _up.upload()
+            name = next((k for k in up if k.endswith(".zip")), None)
+            if name is None:
+                raise RuntimeError("No zip uploaded.")
+            Path(name).replace(zp)           # saved into Drive for later runs
+        else:
+            raise RuntimeError(f"{DATA_ZIP_NAME} not found in {DATA_DIR}.")
+    n = 0
+    with zipfile.ZipFile(zp) as z:
+        for m in z.infolist():
+            parts = [x for x in m.filename.replace("\\", "/").split("/") if x]
+            if m.is_dir() or not parts:
+                continue
+            rel = "/".join(parts[1:] if parts[0] == "nav3_bars" else parts)
+            dst = BARS_DIR / rel; dst.parent.mkdir(parents=True, exist_ok=True)
+            with z.open(m) as src, open(dst, "wb") as out:
+                shutil.copyfileobj(src, out)
+            n += 1
+    print(f"Extracted {n} files from {zp.name}")
+if not (BARS_DIR / "manifest.json").exists():
+    stage_bars_zip()
+if sha256_file(BARS_DIR / "manifest.json") != DATA_MANIFEST_SHA256:
+    raise RuntimeError("manifest.json does not match the SHA-256 pinned in section 2: the data package was altered or is a different version.")
+BARS_MANIFEST = json.loads((BARS_DIR / "manifest.json").read_text())
+_bad = [k for k, v in BARS_MANIFEST["files"].items() if not (BARS_DIR / k).exists() or sha256_file(BARS_DIR / k) != v]
+if _bad:
+    raise RuntimeError(f"{len(_bad)} data files missing or changed, e.g. {_bad[:5]}")
+print(f"All {len(BARS_MANIFEST['files'])} data files match the manifest (data end {BARS_MANIFEST['data_end']}).")
+PROV = [{"source": "TriFrame tier-A bars + SPY (nav3_bars_66.zip)", "status": "OK",
+         "note": f"{len(BARS_MANIFEST['files'])} files SHA-256 verified; root {BARS_MANIFEST['source_root_sha256_prefix']}"}]
+
+# %%
+# ---------------------------------------------------------------- EDGAR client (SEC fair-access policy: declared agent, <= 8 req/s)
+class SecClient:
+    def __init__(self, ua: str, max_rps: float = 8):
+        self.s = requests.Session(); self.s.headers.update({"User-Agent": ua, "Accept-Encoding": "gzip, deflate"})
+        self.min_dt, self.last, self.n403, self.n_soft_fail = 1.0 / max_rps, 0.0, 0, 0
+    def get(self, url: str, as_json: bool = False, tries: int = 5, soft: bool = False):
+        tries = 2 if soft else tries
+        for k in range(tries):
+            wait = self.min_dt - (time.time() - self.last)
+            if wait > 0:
+                time.sleep(wait)
+            self.last = time.time()
+            try:
+                r = self.s.get(url, timeout=30)
+            except requests.RequestException:
+                time.sleep(2 ** k); continue
+            if r.status_code == 200:
+                return r.json() if as_json else r.text
+            if r.status_code == 404:
+                return None
+            if r.status_code == 403:
+                self.n403 += 1
+                if self.n403 >= 5:
+                    raise RuntimeError("EDGAR returned 403 five times: check SEC_USER_AGENT ('Name email').")
+            time.sleep(min(60, (2 if soft else 5) * 2 ** k))
+        if soft:
+            self.n_soft_fail += 1
+            return None
+        raise RuntimeError(f"EDGAR request failed after {tries} tries: {url}")
+SEC = SecClient(SEC_USER_AGENT, CFG["sec"]["max_rps"])
+SUBM_DIR = DATA_DIR / "sec" / "submissions"; SUBM_DIR.mkdir(parents=True, exist_ok=True)
+
+def submissions(cik: int, need_before: str) -> pd.DataFrame:
+    """All filings of one CIK (recent + older pages as needed), cached on Drive."""
+    p = SUBM_DIR / f"CIK{cik:010d}.json"
+    if p.exists():
+        sub = json.loads(p.read_text())
+    else:
+        sub = SEC.get(f"https://data.sec.gov/submissions/CIK{cik:010d}.json", as_json=True) or {}
+        sub["_pages"] = []; p.write_text(json.dumps(sub))
+    frames = [pd.DataFrame(sub.get("filings", {}).get("recent", {}))]
+    oldest = frames[0]["filingDate"].min() if len(frames[0]) else "9999"
+    pages = sub.get("_pages", [])
+    if oldest > need_before and not pages and sub.get("filings", {}).get("files"):
+        for f in sub["filings"]["files"]:
+            pg = SEC.get(f"https://data.sec.gov/submissions/{f['name']}", as_json=True)
+            if pg:
+                pages.append(pg)
+        sub["_pages"] = pages; p.write_text(json.dumps(sub))
+    frames += [pd.DataFrame(pg) for pg in pages]
+    fl = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    if len(fl):
+        fl = fl.drop_duplicates("accessionNumber")
+        fl["cik"] = int(cik)
+    return fl
+
+def filing_index(t: str) -> pd.DataFrame:
+    """10-K / 10-Q / 8-K originals of ticker t from all its CIKs inside the study window."""
+    fr = [submissions(c, CFG["sec"]["start"]) for c in CIKS[t]]
+    fl = pd.concat([f for f in fr if len(f)], ignore_index=True) if any(len(f) for f in fr) else pd.DataFrame()
+    if fl.empty:
+        return fl
+    fl = fl[fl["form"].isin(CFG["sec"]["forms"]) & (fl["filingDate"] >= CFG["sec"]["start"]) & (fl["filingDate"] <= CFG["data_end"])]
+    return fl.drop_duplicates("accessionNumber").sort_values("filingDate").reset_index(drop=True)
+
+# CIK cross-check against SEC's own ticker table (warning only: pinned CIKs include predecessors such as Disney's)
+try:
+    _ct = SEC.get("https://www.sec.gov/files/company_tickers.json", as_json=True) or {}
+    SEC_TICKER_CIK = {v["ticker"].upper().replace("-", "."): int(v["cik_str"]) for v in _ct.values()}
+except Exception as e:
+    SEC_TICKER_CIK = {}; print("company_tickers.json unavailable:", e)
+for t, ciks in CIKS.items():
+    if t in SEC_TICKER_CIK and SEC_TICKER_CIK[t] != ciks[0]:
+        print(f"WARNING: SEC lists CIK {SEC_TICKER_CIK[t]} for {t}; pinned {ciks}. The SEC value is prepended.")
+        CIKS[t] = [SEC_TICKER_CIK[t]] + [c for c in ciks if c != SEC_TICKER_CIK[t]]
+
+# %%
+# ---------------------------------------------------------------- the substitution rule
+def sec_counts(t: str) -> dict:
+    fl = filing_index(t)
+    fl = fl[fl["filingDate"] >= "2016-01-01"] if len(fl) else fl
+    return {f: int((fl["form"] == f).sum()) if len(fl) else 0 for f in CFG["sec"]["forms"]}
+def sec_ok(c: dict) -> bool:
+    return all(c[f] >= CFG["sec_min_counts"][f] for f in CFG["sec_min_counts"])
+
+UNIVERSE_LOG, TICKERS, SECTOR_OF = [], [], {}
+for sec_name, names in STUDY.items():
+    chosen = names[: CFG["quick_per_sector"]] if QUICK else list(names)
+    reserves = list(RESERVES[sec_name])
+    final = []
+    for t in chosen:
+        c = sec_counts(t)
+        if sec_ok(c):
+            final.append(t); UNIVERSE_LOG.append({"sector": sec_name, "ticker": t, "status": "kept", **c})
+            continue
+        UNIVERSE_LOG.append({"sector": sec_name, "ticker": t, "status": "FAILED SEC rule", **c})
+        while reserves:
+            r = reserves.pop(0); cr = sec_counts(r)
+            if sec_ok(cr):
+                final.append(r); UNIVERSE_LOG.append({"sector": sec_name, "ticker": r, "status": f"reserve replacing {t}", **cr}); break
+            UNIVERSE_LOG.append({"sector": sec_name, "ticker": r, "status": "reserve failed SEC rule", **cr})
+        else:
+            raise RuntimeError(f"No reserve left for {sec_name}")
+    TICKERS += final
+    SECTOR_OF.update({t: sec_name for t in final})
+UNIVERSE_DF = pd.DataFrame(UNIVERSE_LOG)
+UNIVERSE_DF["replaces_brief_ticker"] = UNIVERSE_DF["ticker"].map({v: k for k, v in REPLACED.items()}).fillna("")
+UNIVERSE_DF.to_csv(SUB["tables"] / "universe_sec_check.csv", index=False)
+display(UNIVERSE_DF)
+print(f"Study universe: {len(TICKERS)} stocks:", {s: [t for t in TICKERS if SECTOR_OF[t] == s] for s in SECTORS})
+PROV.append({"source": "SEC EDGAR submissions", "status": "OK", "note": f"{len(UNIVERSE_DF)} tickers checked; rule {CFG['sec_min_counts']}"})
+
+# %%
+# ---------------------------------------------------------------- load bars
+WARM = pd.Timestamp(CFG["warmup_start"]); DATA_END = pd.Timestamp(CFG["data_end"])
+def load_daily(p: Path) -> pd.DataFrame:
+    d = pd.read_parquet(p)
+    d["date"] = pd.to_datetime(d["date"])
+    if d["date"].dt.tz is not None:
+        d["date"] = d["date"].dt.tz_localize(None)
+    d["date"] = d["date"].dt.normalize().astype("datetime64[ns]")
+    d = d[(d["date"] >= WARM) & (d["date"] <= DATA_END)].sort_values("date").reset_index(drop=True)
+    return d[["date", "open", "high", "low", "close", "volume"]].astype({c: float for c in ["open", "high", "low", "close", "volume"]})
+def load_hourly(p: Path) -> pd.DataFrame:
+    h = pd.read_parquet(p)
+    h["timestamp"] = pd.to_datetime(h["timestamp"], utc=True).astype("datetime64[ns, UTC]")
+    h = h[(h["timestamp"] >= WARM.tz_localize(NY)) & (h["timestamp"] < (DATA_END + pd.Timedelta(days=1)).tz_localize(NY))]
+    h = h.sort_values("timestamp").reset_index(drop=True)
+    h["session"] = h["timestamp"].dt.tz_convert(NY).dt.tz_localize(None).dt.normalize().astype("datetime64[ns]")
+    return h[["timestamp", "session", "open", "high", "low", "close", "volume"]]
+
+BARS_D = {t: load_daily(BARS_DIR / "1day" / f"{t}.parquet") for t in TICKERS}
+BARS_H = {t: load_hourly(BARS_DIR / "1hour" / f"{t}.parquet") for t in TICKERS}
+# Trading calendar = the study stocks' own sessions (TriFrame verified them against the NYSE calendar: 0 missing, 0 extra).
+CAL = pd.DatetimeIndex(sorted(set().union(*[set(d["date"]) for d in BARS_D.values()]))).astype("datetime64[ns]")
+# SPY (market reference for abnormal returns and 3 technical features). The bundled file ends 2022-12-30 (NEXUS V1 sealed
+# design), so later sessions are added from Yahoo, scaled to the bundled close on the last common day; if Yahoo fails,
+# an equal-weight index of the study stocks is used after 2022. The source of every SPY row is recorded.
+SPY_D = load_daily(BARS_DIR / "etf" / "SPY_1day.parquet"); SPY_D["source"] = "bundled"
+SPY_CACHE = DATA_DIR / "spy_extension.parquet"
+if SPY_D["date"].max() < DATA_END - pd.Timedelta(days=7):
+    last = SPY_D["date"].max(); ext = None
+    try:
+        if SPY_CACHE.exists():
+            ext = pd.read_parquet(SPY_CACHE)
+        else:
+            import yfinance as yf
+            y_ = yf.Ticker("SPY").history(start=str((last - pd.Timedelta(days=10)).date()), end=str((DATA_END + pd.Timedelta(days=2)).date()),
+                                          interval="1d", auto_adjust=False, actions=False)
+            yi = pd.DatetimeIndex(y_.index); yi = yi.tz_convert(NY).tz_localize(None) if yi.tz is not None else yi
+            ext = pd.DataFrame({"date": yi.normalize().astype("datetime64[ns]"), "open": y_["Open"].values, "high": y_["High"].values,
+                                "low": y_["Low"].values, "close": y_["Close"].values, "volume": y_["Volume"].values.astype(float)}).dropna()
+            ext.to_parquet(SPY_CACHE, index=False)
+        k = float(SPY_D.set_index("date").loc[last, "close"]) / float(ext.set_index("date").loc[last, "close"])
+        ext = ext[(ext["date"] > last) & (ext["date"] <= DATA_END)].copy()
+        ext[["open", "high", "low", "close"]] *= k; ext["source"] = "yahoo (scaled)"
+    except Exception as e:
+        print(f"Yahoo SPY unavailable ({type(e).__name__}: {e}); using an equal-weight index of the study stocks after {last.date()}.")
+        cl = pd.DataFrame({t: BARS_D[t].set_index("date")["close"] for t in TICKERS}).sort_index()
+        ew = (cl.pct_change().mean(1).fillna(0) + 1).cumprod(); ew = ew / ew.loc[last] * float(SPY_D.set_index("date").loc[last, "close"])
+        ew = ew[(ew.index > last) & (ew.index <= DATA_END)]
+        ext = pd.DataFrame({"date": ew.index, "open": ew.values, "high": ew.values, "low": ew.values, "close": ew.values, "volume": 0.0,
+                            "source": "equal-weight study stocks"})
+    SPY_D = pd.concat([SPY_D, ext[SPY_D.columns]], ignore_index=True).sort_values("date").reset_index(drop=True)
+_spy_missing = len(CAL[CAL >= pd.Timestamp(CFG["decision_start"]) - pd.Timedelta(days=400)].difference(pd.DatetimeIndex(SPY_D["date"])))
+print("SPY rows by source:", SPY_D["source"].value_counts().to_dict(), "| SPY last date:", SPY_D["date"].max().date(),
+      "| study sessions without SPY:", _spy_missing)
+assert SPY_D["date"].max() >= DATA_END - pd.Timedelta(days=7) and _spy_missing <= 5, "SPY does not cover the study window"
+PROV.append({"source": "SPY", "status": "OK", "note": str(SPY_D["source"].value_counts().to_dict())})
+print(f"{len(TICKERS)} stocks loaded; daily rows {sum(len(d) for d in BARS_D.values()):,}; hourly rows {sum(len(h) for h in BARS_H.values()):,}; "
+      f"calendar {CAL[0].date()} .. {CAL[-1].date()} ({len(CAL)} sessions)")
+
+# %% [markdown]
+### 3.1 Bar validation tests (stop on failure)
+Per stock: unique sorted dates; OHLC consistency and positive prices; hourly bars start at :30 New York time with at most 7 per session; every hourly session is a daily session; daily close equals the last hourly close (≥ 95 % of sessions within 0.1 %); daily sessions equal the SPY calendar (no missing session); bars reach the data end.
+
+# %%
+BAR_CHECKS = []
+for t in TICKERS:
+    d, h = BARS_D[t], BARS_H[t]
+    c = {"ticker": t, "sector": SECTOR_OF[t], "first": str(d.date.min().date()), "last": str(d.date.max().date()),
+         "daily_rows": len(d), "hourly_rows": len(h)}
+    c["daily_sorted_unique"] = bool(d["date"].is_unique and d["date"].is_monotonic_increasing)
+    c["ohlc_ok"] = bool(((d.high >= d[["open", "close"]].max(axis=1) - 1e-9) & (d.low <= d[["open", "close"]].min(axis=1) + 1e-9) & (d.low > 0)).all())
+    hny = h["timestamp"].dt.tz_convert(NY)
+    c["hourly_minute_30"] = bool((hny.dt.minute == 30).all())
+    per = h.groupby("session").size()
+    c["hourly_max_per_session"] = int(per.max())
+    c["hourly_subset_of_daily"] = bool(set(per.index) <= set(d["date"]))
+    lh = h.groupby("session")["close"].last(); dc = d.set_index("date")["close"].reindex(lh.index)
+    c["close_match_share"] = float((np.abs(dc - lh) / dc < 1e-3).mean())
+    win = d["date"] >= pd.Timestamp(CFG["decision_start"]) - pd.Timedelta(days=120)
+    c["sessions_without_hourly_in_window"] = int((~d.loc[win, "date"].isin(per.index)).sum())
+    cal_w = CAL[(CAL >= d.date.min()) & (CAL <= d.date.max())]
+    c["missing_vs_calendar"] = int(len(cal_w.difference(pd.DatetimeIndex(d.date))))
+    BAR_CHECKS.append(c)
+BAR_CHECKS_DF = pd.DataFrame(BAR_CHECKS); BAR_CHECKS_DF.to_csv(SUB["tables"] / "bar_validation.csv", index=False)
+display(BAR_CHECKS_DF)
+for c in BAR_CHECKS:
+    assert c["daily_sorted_unique"] and c["ohlc_ok"], f"bar integrity failed: {c['ticker']}"
+    assert c["hourly_minute_30"] and c["hourly_max_per_session"] <= 7 and c["hourly_subset_of_daily"], f"hourly layout failed: {c['ticker']}"
+    assert c["close_match_share"] > 0.95, f"daily/hourly disagreement: {c['ticker']}"
+    assert c["missing_vs_calendar"] == 0, f"missing sessions: {c['ticker']}"
+    assert pd.Timestamp(c["last"]) >= DATA_END - pd.Timedelta(days=7), f"bars end early: {c['ticker']}"
+    assert pd.Timestamp(c["first"]) <= pd.Timestamp(CFG["decision_start"]) - pd.Timedelta(days=380), f"too little warm-up history: {c['ticker']}"
+print("Bar validation passed for all stocks. Sessions without hourly bars inside the window:",
+      int(BAR_CHECKS_DF["sessions_without_hourly_in_window"].sum()))
+
+# %% [markdown]
+### 3.2 Dataset analysis (stocks, sectors, market path)
+
+# %%
+close = pd.DataFrame({t: BARS_D[t].set_index("date")["close"] for t in TICKERS}).sort_index()
+rets = close.pct_change()
+fig, ax = plt.subplots(1, 2, figsize=(15, 4), gridspec_kw={"width_ratios": [3, 1.2]})
+BLOCK_COLORS = {"train": "#dbeafe", "inner": "#fef3c7", "val": "#dcfce7", "test": "#fee2e2"}
+for s in SECTORS:
+    cols = [t for t in TICKERS if SECTOR_OF[t] == s]
+    idx = (rets[cols].loc[CFG["decision_start"]:].mean(1).fillna(0) + 1).cumprod()
+    ax[0].plot(idx.index, idx.values, lw=1, label=s)
+for b, (a, z) in CFG["blocks"].items():
+    ax[0].axvspan(pd.Timestamp(a), pd.Timestamp(z), color=BLOCK_COLORS[b], alpha=0.6, lw=0)
+ax[0].set_yscale("log"); ax[0].legend(fontsize=7, ncol=3); ax[0].set_title("Equal-weight price index by sector (blocks shaded: train / inner / val / test)")
+ax[0].grid(alpha=0.3)
+vol = rets.loc[CFG["decision_start"]:].std() * np.sqrt(252)
+pd.DataFrame({"vol": vol, "sector": pd.Series(SECTOR_OF)}).boxplot(column="vol", by="sector", ax=ax[1], rot=60, fontsize=7)
+ax[1].set_title("Annualised daily volatility per stock"); fig.suptitle("")
+plt.tight_layout(); savefig(fig, "eda_universe.png"); plt.show()
+DATASET_TABLE = pd.DataFrame([{"ticker": t, "sector": SECTOR_OF[t], "first_bar": BARS_D[t].date.min().date(),
+                               "sessions_in_window": int((BARS_D[t].date >= pd.Timestamp(CFG["decision_start"])).sum()),
+                               "hourly_bars": len(BARS_H[t]), "ann_vol": round(float(vol[t]), 3),
+                               "median_dollar_volume_m": round(float((BARS_D[t].close * BARS_D[t].volume).median() / 1e6), 1)}
+                              for t in TICKERS])
+DATASET_TABLE.to_csv(SUB["tables"] / "dataset_stocks.csv", index=False); display(DATASET_TABLE.head(12))
+tick("3 data")

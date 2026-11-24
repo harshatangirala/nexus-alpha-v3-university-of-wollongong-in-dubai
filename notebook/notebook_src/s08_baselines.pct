@@ -1,0 +1,42 @@
+# %% [markdown]
+## 8. Baselines (every deep model must beat these to claim anything)
+
+| Id | What it is | Why |
+|---|---|---|
+| `prior` | training class shares / mean volatility / drawdown base rate, then calibrated | the "know nothing" floor |
+| `baseline_simple` | direction: logistic on 20/60/120-day momentum; volatility: **HAR** regression on 5/20/60-day and hourly realised volatility (Corsi 2009); drawdown: logistic on trailing volatility, distance from 52-week high and 20-day return | the classic finance baselines for each target |
+| `tech_gbm` | LightGBM on all 20 technical indicators (§5), early-stopped on the inner block | reference: what simple numbers already achieve |
+
+CV-specific controls (random-weight backbone, label shuffle) are in §9; the NLP baseline (TF-IDF) is in §15.
+
+# %%
+def prior_raw(ctx):
+    raw = {}
+    for h in HORIZONS:
+        raw[f"dir_{h}"] = np.tile(np.log(np.clip(ctx.prior[f"dir_{h}"], 1e-6, 1)), (ctx.n, 1))
+        raw[f"vol_{h}"] = np.full(ctx.n, ctx.prior[f"vol_{h}"])
+        q = min(max(ctx.prior[f"dd_{h}"], 1e-4), 1 - 1e-4)
+        raw[f"dd_{h}"] = np.full(ctx.n, np.log(q / (1 - q)))
+    return raw
+finalize(PANEL, "prior", prior_raw(PANEL), "baseline", label="Prior (base rates)")
+
+_fi = {c: i for i, c in enumerate(TECH_COLS)}
+SIMPLE_FEATS = {"dir": ["ret_20d", "ret_60d", "ret_120d"], "vol": ["lrv_5d", "lrv_20d", "lrv_60d", "lrv_hourly_5d"],
+                "dd": ["lrv_20d", "lrv_hourly_5d", "dd_252", "ret_20d"]}
+raw_simple = {}
+for kd, cols in SIMPLE_FEATS.items():
+    Xs = X_TECH[:, [_fi[c] for c in cols]]
+    raw_simple.update(fit_heads(PANEL, Xs, TR, IN, "linear", tasks=[f"{kd}_{h}" for h in HORIZONS]))
+finalize(PANEL, "baseline_simple", raw_simple, "baseline", label="Momentum / HAR / trailing-vol baselines", features=SIMPLE_FEATS)
+
+st_tech = Stage("tech_gbm", [TECH_COLS, GBM, N, CFG["blocks"]], [_pred_path("panel", "tech_gbm")])
+if not (st_tech.done() and have_pred("panel", "tech_gbm")):
+    t0 = time.time()
+    finalize(PANEL, "tech_gbm", fit_heads(PANEL, X_TECH, TR, IN, "gbm"), "reference", label="Technical-indicator LightGBM",
+             train_minutes=round((time.time() - t0) / 60, 2))
+    st_tech.finish()
+BASELINES = ["prior", "baseline_simple", "tech_gbm"]
+LB_BASE = leaderboard(PANEL, BASELINES, PANEL.mask["val"])
+display(LB_BASE.pivot_table(index="model", columns="task", values="primary").round(3))
+LB_BASE.to_csv(SUB["tables"] / "baselines_val.csv", index=False)
+tick("8 baselines")

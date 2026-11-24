@@ -1,0 +1,165 @@
+# %% [markdown]
+## 13. SEC filings: download, point-in-time timestamps, sections and text analysis
+
+**Which filings.** Original 10-K, 10-Q and 8-K filings (amendments excluded) of the study companies, 2015-06 to the data end (filings before the first decision are needed only as "latest filing" context). QUICK mode keeps every 10-K and 10-Q and every 3rd 8-K.
+
+**When a filing becomes usable (point-in-time rule from the SEC study).** EDGAR's JSON `acceptanceDateTime` is unreliable (about 70 % are New York wall time mislabelled as UTC), so the acceptance time is read from each filing's SGML header (quality A); otherwise the later of the two JSON readings is used (quality C). Availability = acceptance + 5 min (public dissemination) + 30 min (processing). A periodic report is never treated as available at its period end.
+
+**Text and sections.** HTML → text (scripts, inline-XBRL headers and mostly-numeric tables removed). 10-K: Item 7, *Management's Discussion and Analysis* (MD&A); 10-Q: Part I Item 2 (MD&A); banks often put the MD&A in Exhibit 13 (the annual report), which is fetched too. 8-K: the item text plus the first EX-99 exhibit (usually the press release); the 8-K item codes (e.g. 2.02 results, 5.02 officer change) come from EDGAR's index. If an MD&A heading is not found (or is shorter than 2,000 characters), the whole document is used minus its first 3 % (cover page and table of contents). Each model reads `[form] [section] text`.
+
+# %%
+import lxml.html
+_WS = re.compile(r"\s+"); _DIGIT_RE = re.compile(r"\d")
+_BLOCK_TAGS = {"p", "div", "br", "tr", "li", "h1", "h2", "h3", "h4", "h5", "h6", "table"}
+def html_to_text(raw: str, is_html: bool = True) -> str:
+    if not raw:
+        return ""
+    if not is_html:
+        return _WS.sub(" ", raw).strip()
+    try:
+        doc = lxml.html.fromstring(raw.encode("utf-8", "ignore"))
+    except Exception:
+        return _WS.sub(" ", re.sub(r"<[^>]+>", " ", raw)).strip()
+    for bad in doc.xpath("//script|//style|//head|//*[name()='ix:header']"):
+        bad.drop_tree()
+    for tb in doc.xpath("//table"):
+        s = tb.text_content()
+        if s and len(_DIGIT_RE.findall(s)) / max(1, len(s)) > 0.25:
+            tb.drop_tree()
+    for el in doc.iter():
+        if isinstance(el.tag, str) and el.tag.lower() in _BLOCK_TAGS:
+            el.tail = "\n" + (el.tail or "")
+    txt = re.sub(r"[ \t\xa0]+", " ", doc.text_content())
+    return re.sub(r"\n\s*\n+", "\n\n", txt).strip()
+
+_ACC_RE = re.compile(r"<ACCEPTANCE-DATETIME>\s*(\d{14})|ACCEPTANCE-DATETIME:\s*(\d{14})")
+def parse_sgml_header(txt: str):
+    t = html.unescape(txt or ""); m = _ACC_RE.search(t)
+    acc = (m.group(1) or m.group(2)) if m else None
+    docs = []
+    for block in re.split(r"<DOCUMENT>", t)[1:]:
+        ty, fn = re.search(r"<TYPE>\s*([^\s<]+)", block), re.search(r"<FILENAME>\s*([^\s<]+)", block)
+        if ty and fn:
+            docs.append((ty.group(1).strip().upper(), fn.group(1).strip()))
+    return acc, docs
+
+def acceptance_time(header14, json_raw, filing_date):
+    if header14:
+        t = pd.Timestamp(f"{header14[:4]}-{header14[4:6]}-{header14[6:8]} {header14[8:10]}:{header14[10:12]}:{header14[12:14]}")
+        return t.tz_localize(NY, ambiguous=True, nonexistent="shift_forward"), "A"
+    if json_raw is not None and str(json_raw).strip() not in ("", "nan", "None"):
+        t = pd.Timestamp(str(json_raw)[:19])
+        later = max(t.tz_localize("UTC").tz_convert(NY), t.tz_localize(NY, ambiguous=True, nonexistent="shift_forward"))
+        if not (later.hour == 0 and later.minute == 0):
+            return later, "C"
+    return pd.Timestamp(filing_date).tz_localize(NY) + pd.Timedelta(CFG["sec"]["date_only_time_et"] + ":00"), "B"
+
+_SEC_PAT = {
+    "10-K": (r"item\s*7\s*[\.\:\-–—]?\s*management[’'`]?s?\s+discussion",
+             r"item\s*7a\s*[\.\:\-–—]?\s*quantitative|item\s*8\s*[\.\:\-–—]?\s*financial\s+statements"),
+    "10-Q": (r"item\s*2\s*[\.\:\-–—]?\s*management[’'`]?s?\s+discussion",
+             r"item\s*3\s*[\.\:\-–—]?\s*quantitative|item\s*4\s*[\.\:\-–—]?\s*controls"),
+}
+def extract_section(form: str, text: str):
+    """(section name, section text). MD&A for 10-K / 10-Q (longest heading-to-next-item span), else a fallback."""
+    if form == "8-K":
+        return "8-K body + EX-99", text
+    st_p, en_p = _SEC_PAT[form]
+    best = ""
+    for m in re.finditer(st_p, text, flags=re.I):
+        e = re.search(en_p, text[m.end(): m.end() + 600000], flags=re.I)
+        span = text[m.start(): m.end() + (e.start() if e else 300000)]
+        if len(span) > len(best):
+            best = span
+    if len(best) >= 2000:
+        return "MD&A", best
+    return "full text (no MD&A heading)", text[int(0.03 * len(text)):]
+
+# %%
+SEC_DIR = DATA_DIR / "sec"; TEXT_DIR = SEC_DIR / "texts"; TEXT_DIR.mkdir(parents=True, exist_ok=True)
+SEC_KEY = cfg_hash([CFG["sec"], QUICK, CFG["data_end"], "v3"])
+FIL_COLS = ["ticker", "cik", "accession", "form", "filing_date", "acceptance_et", "available_utc", "ts_quality", "items", "n_chars",
+            "section", "section_chars", "docs"]
+
+def download_ticker(t: str) -> pd.DataFrame:
+    meta_p, text_p = TEXT_DIR / f"{t}_{SEC_KEY}_meta.parquet", TEXT_DIR / f"{t}_{SEC_KEY}_text.parquet"
+    if meta_p.exists() and text_p.exists() and not FORCE_RERUN:
+        return pd.read_parquet(meta_p)
+    fl = filing_index(t)
+    if QUICK and len(fl):
+        k8 = fl[fl.form == "8-K"].iloc[:: CFG["sec"]["quick_8k_stride"]]
+        fl = pd.concat([fl[fl.form != "8-K"], k8]).sort_values("filingDate")
+    rows, texts, t0 = [], [], time.time()
+    for _, f in fl.iterrows():
+        acc = f["accessionNumber"]; nod = acc.replace("-", ""); cik = int(f["cik"])
+        base = f"https://www.sec.gov/Archives/edgar/data/{cik}/{nod}/"
+        hdr14, docs = parse_sgml_header(SEC.get(base + f"{acc}-index-headers.html", soft=True) or "")
+        acc_et, q = acceptance_time(hdr14, f.get("acceptanceDateTime"), f["filingDate"])
+        avail = acc_et + pd.Timedelta(minutes=CFG["sec"]["public_lag_min"] + CFG["sec"]["processing_min"])
+        want = [f["primaryDocument"]] if str(f.get("primaryDocument") or "").strip() else []
+        if f["form"] == "8-K":
+            want += [fn for ty, fn in docs if ty.startswith("EX-99")][: CFG["sec"]["max_exhibits_8k"]]
+        else:
+            want += [fn for ty, fn in docs if ty.startswith("EX-13")][:1]
+        parts = [html_to_text(SEC.get(base + fn, soft=True) or "", is_html=not fn.lower().endswith(".txt")) for fn in want]
+        body = "\n\n".join(x for x in parts if x)[:400000]
+        sec_name, sec_txt = extract_section(f["form"], body)
+        rows.append({"ticker": t, "cik": cik, "accession": acc, "form": f["form"], "filing_date": str(f["filingDate"]),
+                     "acceptance_et": str(acc_et), "available_utc": str(avail.tz_convert("UTC")), "ts_quality": q,
+                     "items": str(f.get("items") or ""), "n_chars": len(body), "section": sec_name, "section_chars": len(sec_txt),
+                     "docs": "|".join(want)})
+        texts.append({"accession": acc, "section_text": sec_txt[: CFG["sec"]["max_chars"] * 2]})
+    meta = pd.DataFrame(rows, columns=FIL_COLS)
+    pd.DataFrame(texts, columns=["accession", "section_text"]).to_parquet(text_p, index=False, compression="zstd")
+    meta.to_parquet(meta_p, index=False)                     # written last: marks the ticker complete
+    print(f"  {t}: {meta.form.value_counts().to_dict()} in {time.time() - t0:.0f}s")
+    return meta
+
+t0 = time.time()
+FIL = pd.concat([download_ticker(t) for t in TICKERS], ignore_index=True)
+FIL["available_utc"] = pd.to_datetime(FIL["available_utc"], utc=True)
+FIL = FIL.sort_values(["ticker", "available_utc"]).reset_index(drop=True)
+print(f"SEC filings ready in {time.time() - t0:.0f}s: {FIL.form.value_counts().to_dict()}; optional requests that fell back: {SEC.n_soft_fail}")
+_TXT = {}
+for t in TICKERS:
+    tp = pd.read_parquet(TEXT_DIR / f"{t}_{SEC_KEY}_text.parquet"); _TXT.update(dict(zip(tp["accession"], tp["section_text"])))
+FIL["section_text"] = FIL["accession"].map(_TXT).fillna(""); del _TXT
+_ITEM_RE = re.compile(r"\bItem\s+[1-9]\.\d{2}\b", re.I)
+def strip_8k_cover(t):
+    """Start an 8-K at its first item heading (e.g. 'Item 2.02 Results of Operations'): the cover page is boilerplate."""
+    m = _ITEM_RE.search(t)
+    return t[m.start():] if m and m.start() < 0.5 * len(t) else t
+_is8 = FIL["form"] == "8-K"
+FIL.loc[_is8, "section_text"] = FIL.loc[_is8, "section_text"].map(strip_8k_cover)
+TEXT_KEY = cfg_hash([SEC_KEY, "8k_cover_strip_v1"])          # changes whenever the text a model reads changes
+acc_ny = pd.to_datetime(FIL["acceptance_et"].astype(str), utc=True).dt.tz_convert(NY)
+mins = acc_ny.dt.hour * 60 + acc_ny.dt.minute
+FIL["session_bucket"] = np.where(mins < 570, "pre-market", np.where(mins < 960, "intraday", "after close"))
+FIL["sector"] = FIL["ticker"].map(SECTOR_OF)
+PROV.append({"source": "SEC EDGAR filings", "status": "OK", "note": f"{len(FIL)} filings; timestamp quality {FIL.ts_quality.value_counts().to_dict()}"})
+
+# %% [markdown]
+### 13.2 Text dataset analysis
+
+# %%
+FIL["year"] = pd.to_datetime(FIL["filing_date"]).dt.year
+cnt = FIL.pivot_table(index="year", columns="form", values="accession", aggfunc="count").fillna(0).astype(int)
+cnt.to_csv(SUB["tables"] / "sec_per_year.csv"); display(cnt.T)
+sec_cnt = FIL.pivot_table(index="sector", columns="form", values="accession", aggfunc="count").fillna(0).astype(int)
+sec_cnt.to_csv(SUB["tables"] / "sec_per_sector.csv"); display(sec_cnt)
+TEXT_STATS = FIL.groupby("form").agg(filings=("accession", "size"), median_doc_chars=("n_chars", "median"),
+                                     median_section_chars=("section_chars", "median"),
+                                     mdna_found_share=("section", lambda s: float((s == "MD&A").mean())),
+                                     empty_share=("section_chars", lambda s: float((s < 500).mean())))
+TEXT_STATS.to_csv(SUB["tables"] / "sec_text_stats.csv"); display(TEXT_STATS)
+items8 = FIL.loc[FIL.form == "8-K", "items"].str.split(",").explode().str.strip()
+ITEM_COUNTS = items8[items8 != ""].value_counts(); ITEM_COUNTS.to_csv(SUB["tables"] / "sec_8k_item_counts.csv")
+fig, ax = plt.subplots(1, 3, figsize=(16, 3.6))
+for f_ in CFG["sec"]["forms"]:
+    np.log10(FIL.loc[FIL.form == f_, "section_chars"].clip(lower=10)).hist(bins=40, ax=ax[0], alpha=0.5, label=f_)
+ax[0].legend(); ax[0].set_title("log10(characters in the section a model reads)")
+FIL.groupby(["form", "session_bucket"]).size().unstack().plot.bar(ax=ax[1]); ax[1].set_title("Acceptance time vs trading session")
+ITEM_COUNTS.head(15).plot.barh(ax=ax[2]); ax[2].invert_yaxis(); ax[2].set_title("Most frequent 8-K items")
+plt.tight_layout(); savefig(fig, "eda_sec.png"); plt.show()
+print("Filings with < 500 characters of usable text:", int((FIL.section_chars < 500).sum()))
+tick("13 sec text")

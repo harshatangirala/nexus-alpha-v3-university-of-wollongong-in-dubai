@@ -1,0 +1,748 @@
+<title>NEXUS Alpha v3 Study Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: study notebook. Sticky contents rail on wide screens, one reading column, figures break wider. Colours borrow the chart palette (teal up, coral down) used in every model input. */
+:root{
+  --bg:#f5f7f8; --surface:#ffffff; --surface2:#eef2f4; --fg:#16202a; --muted:#5a6873; --line:#cfd8de;
+  --accent:#0f8f86; --up:#0f8f86; --down:#d2453f; --amber:#b7791f; --violet:#5b5bd6;
+  --up-soft:rgba(15,143,134,.12); --down-soft:rgba(210,69,63,.11); --amber-soft:rgba(183,121,31,.13); --violet-soft:rgba(91,91,214,.11);
+  --f-display:"Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Manrope", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0c1117; --surface:#131a22; --surface2:#19222c; --fg:#e3e9ee; --muted:#93a1ad; --line:#2a3540;
+  --accent:#2cc4b7; --up:#2cc4b7; --down:#f2706a; --amber:#e0a84a; --violet:#9a9cf5;
+  --up-soft:rgba(44,196,183,.13); --down-soft:rgba(242,112,106,.13); --amber-soft:rgba(224,168,74,.14); --violet-soft:rgba(154,156,245,.13);
+  color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#0c1117; --surface:#131a22; --surface2:#19222c; --fg:#e3e9ee; --muted:#93a1ad; --line:#2a3540;
+  --accent:#2cc4b7; --up:#2cc4b7; --down:#f2706a; --amber:#e0a84a; --violet:#9a9cf5;
+  --up-soft:rgba(44,196,183,.13); --down-soft:rgba(242,112,106,.13); --amber-soft:rgba(224,168,74,.14); --violet-soft:rgba(154,156,245,.13);
+  color-scheme:dark; }
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.65;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:0 64px}
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.shell{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px}
+@media (max-width:960px){.shell{grid-template-columns:minmax(0,1fr)} nav.toc{display:none}}
+nav.toc{position:sticky;top:calc(env(safe-area-inset-top, 0px) + 24px);align-self:start;max-height:calc(100vh - 48px);overflow:auto;padding-top:40px;font-size:.84rem}
+nav.toc .lbl{font-family:var(--f-mono);font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+nav.toc ol{list-style:none;margin:0;padding:0;display:grid;gap:2px;counter-reset:s}
+nav.toc a{display:flex;gap:10px;padding:5px 8px;border-radius:6px;color:var(--muted);text-decoration:none}
+nav.toc a:hover{background:var(--surface2);color:var(--fg)}
+nav.toc a span{font-family:var(--f-mono);color:var(--accent);min-width:1.6em}
+main{min-width:0}
+header.hero{padding:44px 0 28px;border-bottom:1px solid var(--line)}
+.eyebrow{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;line-height:1.2;margin:0}
+h1{font-size:clamp(2rem,4.6vw,3.1rem);font-weight:700;letter-spacing:-.02em;margin:10px 0 14px}
+h1 em{font-style:normal;color:var(--accent)}
+.lede{font-size:1.12rem;max-width:68ch;color:var(--fg)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:26px}
+.fact{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.fact b{display:block;font-family:var(--f-display);font-size:1.5rem;font-variant-numeric:tabular-nums}
+.fact span{font-size:.82rem;color:var(--muted)}
+section{padding:46px 0 10px;border-bottom:1px solid var(--line);scroll-margin-top:16px}
+section > h2{font-size:clamp(1.45rem,2.6vw,1.9rem);margin:6px 0 14px;display:flex;gap:14px;align-items:baseline}
+section > h2 .n{font-family:var(--f-mono);font-size:.95rem;color:var(--accent);font-weight:600}
+h3{font-size:1.12rem;margin:26px 0 8px}
+p,ul,ol{max-width:72ch}
+p{margin:0 0 12px}
+ul,ol{padding-left:1.2em;margin:0 0 14px}
+li{margin:3px 0}
+code,.mono{font-family:var(--f-mono);font-size:.86em;background:var(--surface2);padding:1px 5px;border-radius:4px}
+.why{border-left:3px solid var(--accent);background:var(--up-soft);padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0;max-width:72ch}
+.why b:first-child{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:2px}
+.prof{border:1px solid var(--violet);background:var(--violet-soft);padding:12px 16px;border-radius:10px;margin:16px 0;max-width:72ch}
+.prof .q{font-weight:700;display:block;margin-bottom:4px}
+.prof .q::before{content:"Professor: ";font-family:var(--f-mono);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--violet);margin-right:4px}
+.posthoc{border:1px dashed var(--amber);background:var(--amber-soft);padding:12px 16px;border-radius:10px;margin:14px 0;max-width:72ch}
+.tag{display:inline-block;font-family:var(--f-mono);font-size:.7rem;letter-spacing:.06em;padding:2px 8px;border-radius:999px;vertical-align:middle;white-space:nowrap}
+.tag.ok{background:var(--up-soft);color:var(--up)} .tag.no{background:var(--down-soft);color:var(--down)} .tag.ph{background:var(--amber-soft);color:var(--amber)} .tag.mid{background:var(--surface2);color:var(--muted)}
+figure{margin:20px 0 22px}
+figure.wide{max-width:100%}
+figure img{display:block;border-radius:8px;border:1px solid var(--line);background:#fff;max-width:100%;height:auto}
+figcaption{font-size:.86rem;color:var(--muted);margin-top:8px;max-width:80ch}
+.diag{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px}
+.diag svg{display:block;min-width:720px;width:100%;height:auto;color:var(--fg)}
+.diag.sm svg{min-width:560px}
+.tw{overflow-x:auto;margin:14px 0 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--surface2)}
+tr:last-child td{border-bottom:none}
+td.num{font-variant-numeric:tabular-nums;font-family:var(--f-mono);font-size:.84rem;white-space:nowrap}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin:14px 0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
+.card h4{font-family:var(--f-display);margin:0 0 6px;font-size:1rem}
+.card p,.card ul{font-size:.92rem;margin-bottom:6px}
+.card.ok{border-color:var(--up)} .card.no{border-color:var(--down)}
+details.qa{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin:8px 0;max-width:80ch}
+details.qa summary{cursor:pointer;padding:12px 16px;font-weight:700;list-style:none;display:flex;gap:10px}
+details.qa summary::before{content:"+";font-family:var(--f-mono);color:var(--violet);width:1em}
+details.qa[open] summary::before{content:"–"}
+details.qa div{padding:0 16px 14px 42px;font-size:.94rem}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 4px}
+.tools button{font:inherit;font-size:.84rem;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer}
+.tools button:hover{border-color:var(--accent)}
+footer{padding:30px 0;color:var(--muted);font-size:.85rem}
+/* svg diagram classes (page stylesheet, so both themes work) */
+.b{fill:var(--surface2);stroke:var(--line);stroke-width:1.2}
+.b-up{fill:var(--up-soft);stroke:var(--up);stroke-width:1.4}
+.b-dn{fill:var(--down-soft);stroke:var(--down);stroke-width:1.4}
+.b-am{fill:var(--amber-soft);stroke:var(--amber);stroke-width:1.4}
+.b-vi{fill:var(--violet-soft);stroke:var(--violet);stroke-width:1.4}
+.t{fill:var(--fg);font-family:var(--f-body);font-size:13px}
+.ts{fill:var(--muted);font-family:var(--f-body);font-size:11.5px}
+.tm{fill:var(--muted);font-family:var(--f-mono);font-size:10.5px}
+.th{fill:var(--fg);font-family:var(--f-display);font-size:14px;font-weight:600}
+.ar{stroke:var(--muted);stroke-width:1.4;fill:none}
+.ar-up{stroke:var(--up);stroke-width:1.6;fill:none}
+.ar-dn{stroke:var(--down);stroke-width:1.6;fill:none}
+.ah{fill:var(--muted)} .ah-up{fill:var(--up)} .ah-dn{fill:var(--down)}
+.fu{fill:var(--up)} .fd{fill:var(--down)} .fa{fill:var(--amber)} .fv{fill:var(--violet)}
+.su{stroke:var(--up)} .sd{stroke:var(--down)}
+</style>
+
+<div class="shell">
+<nav class="toc" aria-label="Contents">
+  <div class="lbl">Contents</div>
+  <ol>
+    <li><a href="#map"><span>00</span>The whole pipeline</a></li>
+    <li><a href="#data"><span>01</span>Data sourcing</a></li>
+    <li><a href="#labels"><span>02</span>Decisions and labels</a></li>
+    <li><a href="#leak"><span>03</span>Time blocks and leakage</a></li>
+    <li><a href="#charts"><span>04</span>Chart images</a></li>
+    <li><a href="#cv"><span>05</span>Vision models</a></li>
+    <li><a href="#text"><span>06</span>SEC filings</a></li>
+    <li><a href="#nlp"><span>07</span>Language models</a></li>
+    <li><a href="#eval"><span>08</span>Baselines and metrics</a></li>
+    <li><a href="#fusion"><span>09</span>Fusion and Monte Carlo</a></li>
+    <li><a href="#test"><span>10</span>Freeze and locked test</a></li>
+    <li><a href="#posthoc"><span>11</span>Post-hoc addenda</a></li>
+    <li><a href="#findings"><span>12</span>What we found</a></li>
+    <li><a href="#dash"><span>13</span>Streamlit dashboard</a></li>
+    <li><a href="#reports"><span>14</span>The three reports</a></li>
+    <li><a href="#limits"><span>15</span>Limitations, future work</a></li>
+    <li><a href="#viva"><span>16</span>Viva questions</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="eyebrow">MAAI final project · University of Wollongong in Dubai · study guide</div>
+  <h1>NEXUS Alpha v3: can AI read <em>charts</em> and <em>filings</em> to forecast stocks?</h1>
+  <p class="lede">The project compares 7 computer-vision networks that look at candlestick charts with 6 language models that read SEC filings. Every model predicts the same things for the same 50 stocks: direction, volatility and the risk of a 10% fall over 5, 10, 20 and 40 trading sessions. Everything was chosen on 2022–2023 and scored once on a locked 2024–2026 test. This page walks through every step and the reason behind it.</p>
+  <div class="facts">
+    <div class="fact"><b>50</b><span>large US stocks, 5 sectors</span></div>
+    <div class="fact"><b>7 + 6</b><span>vision + language models</span></div>
+    <div class="fact"><b>4 × 3</b><span>horizons × targets = 12 tasks</span></div>
+    <div class="fact"><b>64,550</b><span>chart rows, 3 views each (9.7 GB)</span></div>
+    <div class="fact"><b>6,550</b><span>locked test rows, 2024-01 → 2026-08</span></div>
+  </div>
+</header>
+
+<!-- 00 MAP -->
+<section id="map">
+  <h2><span class="n">00</span>The whole pipeline on one page</h2>
+  <p>Read this diagram first. Every later section zooms into one box. Two ideas run through all of it. The data are <b>point in time</b>: no input ever contains information from after the decision moment. And the test is <b>locked</b>: its labels sit in a vault until every choice has been frozen and hashed.</p>
+  <div class="diag">
+  <svg viewBox="0 0 1000 470" role="img" aria-label="End-to-end pipeline: price bars and SEC filings are validated, turned into decisions and labels, split into time blocks, converted into chart images and filing text, fed to 7 vision and 6 language models plus baselines, selected on validation, frozen, tested once, then extended with labelled post-hoc analyses and deployed in a Streamlit dashboard and three reports.">
+    <defs><marker id="m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah"/></marker></defs>
+    <!-- row 1: sources -->
+    <text x="20" y="22" class="tm">SOURCES</text>
+    <rect x="20" y="32" width="200" height="66" rx="8" class="b"/>
+    <text x="120" y="58" text-anchor="middle" class="th">Price bars</text>
+    <text x="120" y="78" text-anchor="middle" class="ts">hourly · daily · weekly, 2014–2026</text>
+    <rect x="20" y="112" width="200" height="66" rx="8" class="b"/>
+    <text x="120" y="138" text-anchor="middle" class="th">SEC EDGAR filings</text>
+    <text x="120" y="158" text-anchor="middle" class="ts">10-K · 10-Q · 8-K + timestamps</text>
+    <!-- prep -->
+    <text x="270" y="22" class="tm">PREPARE</text>
+    <rect x="270" y="32" width="190" height="66" rx="8" class="b"/>
+    <text x="365" y="58" text-anchor="middle" class="th">Validate bars</text>
+    <text x="365" y="78" text-anchor="middle" class="ts">SHA-256, 0 missing sessions</text>
+    <rect x="270" y="112" width="190" height="66" rx="8" class="b"/>
+    <text x="365" y="138" text-anchor="middle" class="th">Point-in-time text</text>
+    <text x="365" y="158" text-anchor="middle" class="ts">acceptance + 35 min, MD&amp;A</text>
+    <line x1="220" y1="65" x2="266" y2="65" class="ar" marker-end="url(#m0)"/>
+    <line x1="220" y1="145" x2="266" y2="145" class="ar" marker-end="url(#m0)"/>
+    <!-- labels -->
+    <rect x="510" y="32" width="210" height="146" rx="8" class="b-vi"/>
+    <text x="615" y="60" text-anchor="middle" class="th">Decisions + labels</text>
+    <text x="615" y="84" text-anchor="middle" class="ts">decide at the close of day t</text>
+    <text x="615" y="104" text-anchor="middle" class="ts">direction · volatility · drawdown</text>
+    <text x="615" y="124" text-anchor="middle" class="ts">h = 5, 10, 20, 40 sessions</text>
+    <text x="615" y="150" text-anchor="middle" class="ts">4 time blocks, 40-session purge</text>
+    <text x="615" y="168" text-anchor="middle" class="tm">test labels → VAULT</text>
+    <line x1="460" y1="65" x2="506" y2="80" class="ar" marker-end="url(#m0)"/>
+    <line x1="460" y1="145" x2="506" y2="130" class="ar" marker-end="url(#m0)"/>
+    <!-- inputs -->
+    <text x="770" y="22" class="tm">MODEL INPUTS</text>
+    <rect x="770" y="32" width="210" height="66" rx="8" class="b-up"/>
+    <text x="875" y="58" text-anchor="middle" class="th">3 chart images</text>
+    <text x="875" y="78" text-anchor="middle" class="ts">1W · 1D · 1H, 224 px, no text</text>
+    <rect x="770" y="112" width="210" height="66" rx="8" class="b-up"/>
+    <text x="875" y="138" text-anchor="middle" class="th">Filing text</text>
+    <text x="875" y="158" text-anchor="middle" class="ts">events + latest filing per day</text>
+    <line x1="720" y1="80" x2="766" y2="65" class="ar" marker-end="url(#m0)"/>
+    <line x1="720" y1="130" x2="766" y2="145" class="ar" marker-end="url(#m0)"/>
+    <!-- row 2: models -->
+    <text x="20" y="232" class="tm">MODEL</text>
+    <rect x="770" y="240" width="210" height="80" rx="8" class="b"/>
+    <text x="875" y="266" text-anchor="middle" class="th">7 CV + 6 NLP</text>
+    <text x="875" y="286" text-anchor="middle" class="ts">frozen features, then fine-tuned</text>
+    <text x="875" y="306" text-anchor="middle" class="ts">+ baselines, + fusion</text>
+    <path d="M875 178 V236" class="ar" marker-end="url(#m0)"/>
+    <rect x="510" y="240" width="210" height="80" rx="8" class="b"/>
+    <text x="615" y="266" text-anchor="middle" class="th">Select on validation</text>
+    <text x="615" y="286" text-anchor="middle" class="ts">2022–2023 only</text>
+    <text x="615" y="306" text-anchor="middle" class="ts">best, top-3, fusion weights</text>
+    <line x1="770" y1="280" x2="724" y2="280" class="ar" marker-end="url(#m0)"/>
+    <rect x="270" y="240" width="190" height="80" rx="8" class="b-dn"/>
+    <text x="365" y="266" text-anchor="middle" class="th">Hashed freeze</text>
+    <text x="365" y="286" text-anchor="middle" class="ts">choices + predictions</text>
+    <text x="365" y="306" text-anchor="middle" class="tm">SHA-256 manifest</text>
+    <line x1="510" y1="280" x2="464" y2="280" class="ar" marker-end="url(#m0)"/>
+    <rect x="20" y="240" width="200" height="80" rx="8" class="b-dn"/>
+    <text x="120" y="266" text-anchor="middle" class="th">Open the vault</text>
+    <text x="120" y="286" text-anchor="middle" class="ts">score 2024-01 → 2026-08</text>
+    <text x="120" y="306" text-anchor="middle" class="ts">H1–H7 decided</text>
+    <line x1="270" y1="280" x2="224" y2="280" class="ar" marker-end="url(#m0)"/>
+    <!-- row 3: outputs -->
+    <text x="20" y="372" class="tm">AFTER THE TEST</text>
+    <rect x="20" y="380" width="200" height="74" rx="8" class="b-am"/>
+    <text x="120" y="406" text-anchor="middle" class="th">Post-hoc addenda</text>
+    <text x="120" y="426" text-anchor="middle" class="ts">stronger baselines, controls</text>
+    <text x="120" y="444" text-anchor="middle" class="tm">labelled H1c–H11</text>
+    <path d="M120 320 V376" class="ar" marker-end="url(#m0)"/>
+    <rect x="270" y="380" width="190" height="74" rx="8" class="b"/>
+    <text x="365" y="406" text-anchor="middle" class="th">3 PDF reports</text>
+    <text x="365" y="426" text-anchor="middle" class="ts">CV · NLP · Multimodal</text>
+    <line x1="220" y1="417" x2="266" y2="417" class="ar" marker-end="url(#m0)"/>
+    <rect x="510" y="380" width="210" height="74" rx="8" class="b-up"/>
+    <text x="615" y="406" text-anchor="middle" class="th">Streamlit dashboard</text>
+    <text x="615" y="426" text-anchor="middle" class="ts">same frozen recipe, live data</text>
+    <text x="615" y="444" text-anchor="middle" class="tm">parity-tested vs notebook</text>
+    <path d="M365 320 C365 350 615 345 615 376" class="ar" marker-end="url(#m0)"/>
+    <text x="500" y="350" class="tm">frozen recipe</text>
+  </svg>
+  </div>
+  <p style="margin-top:12px">The study answers <b>ten project questions</b> (Q1–Q10) through <b>pre-registered hypotheses</b> H1–H7. These were written down before any data were loaded. Questions that came up after the test was opened got new, clearly labelled hypotheses (H1c onward).</p>
+  <div class="why"><b>Why this order</b>The order exists to stop one specific mistake: tuning a model on the data you report. Selection happens on validation, the test is opened once, and anything added later is marked post-hoc. A reader can then trust that the main test numbers are not the result of trying many things until one looked good.</div>
+</section>
+
+<!-- 01 DATA -->
+<section id="data">
+  <h2><span class="n">01</span>Data sourcing: what we used and why</h2>
+  <h3>Prices</h3>
+  <p>The price data come from <b>TriFrame's frozen tier-A bars</b>, packaged as <code>nav3_bars_66.zip</code>. The package holds 50 study stocks, 16 same-sector reserves and SPY. The source chain starts with a Finnhub-derived 1-minute feed, cleaned and aggregated to regular-hours <b>hourly bars</b> (7 per session, aligned to 09:30 New York). Daily and weekly bars are built from those, with Yahoo used to fill gaps. The data run to 2026-10-09, and the package's SHA-256 hash is pinned in the notebook.</p>
+  <p>Every stock must pass these validation tests or the run stops:</p>
+  <ul>
+    <li>dates are unique and sorted;</li>
+    <li>OHLC values are consistent and prices are positive;</li>
+    <li>hourly bars start at :30, with at most 7 per session;</li>
+    <li>every hourly session is also a daily session;</li>
+    <li>the daily close matches the last hourly close (in at least 95% of sessions, within 0.1%);</li>
+    <li>no session is missing against the market calendar.</li>
+  </ul>
+  <h3>Which 50 stocks</h3>
+  <p>The stocks come from the brief's list: 10 in each of Information Technology, Financials, Health Care, Consumer Discretionary and Communication Services. Seven names had no ten-year hourly history and were swapped for same-sector stocks:</p>
+  <ul>
+    <li>AVGO→TXN, CRM→ADBE, BKNG→MAR, CMCSA→META;</li>
+    <li>TMUS→OMC, EA→NYT, GOOGL→GOOG.</li>
+  </ul>
+  <p>An <b>SEC availability rule</b> was fixed before any text was downloaded. Between 2016 and the data end, a stock needs at least 8 10-Ks, 20 10-Qs and 10 8-Ks, or it is replaced by the first reserve in its sector that passes.</p>
+  <figure class="wide"><img src="img/eda_universe.jpg" alt="Equal-weight price index by sector 2016-2026 with blocks shaded, and annualised volatility per stock by sector" loading="lazy" width="1500" height="376">
+  <figcaption>Left: equal-weight price index per sector, with the time blocks shaded (train, inner, validation, test). The 2022 bear market falls in validation and the strong 2024–26 market falls in test. That regime change matters when you read the results. Right: IT stocks are the most volatile and Health Care the calmest.</figcaption></figure>
+  <h3>Filings</h3>
+  <p>We use original 10-K, 10-Q and 8-K filings (no amendments) from SEC EDGAR, from 2015-06 to the data end. Section 06 explains how they are timestamped and cleaned.</p>
+  <div class="prof"><span class="q">Why these stocks and not small caps?</span>Large caps have clean ten-year hourly data and enough filings for the language models. The price is <b>survivorship bias</b>: all 50 still exist today. Jiang, Kelly and Xiu found most of the image signal in small stocks, so our results may understate what charts can do there. This is listed as a limitation.</div>
+</section>
+
+<!-- 02 LABELS -->
+<section id="labels">
+  <h2><span class="n">02</span>Decisions and labels: what exactly is predicted</h2>
+  <p><b>Decision time</b> is the close of session <i>t</i>, after the last hourly bar. Every input uses only what was known at that moment. For each horizon <i>h</i> ∈ {5, 10, 20, 40} sessions there are three targets:</p>
+  <div class="diag sm">
+  <svg viewBox="0 0 760 300" role="img" aria-label="Direction label geometry: from the close at t, a band of plus or minus 0.5 sigma root h widens with the horizon; a close above the band at t plus h is UP, inside is SIDEWAYS, below is DOWN. A fall more than 10 percent below the close at any point is a drawdown event.">
+    <defs><marker id="m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="ah"/></marker></defs>
+    <line x1="60" y1="270" x2="720" y2="270" class="ar"/>
+    <text x="60" y="290" class="tm">t (decision close)</text>
+    <text x="640" y="290" class="tm">t + h</text>
+    <line x1="120" y1="40" x2="120" y2="270" stroke-dasharray="4 4" class="ar"/>
+    <!-- band -->
+    <path d="M120 140 L680 85 L680 195 Z" class="b"/>
+    <text x="560" y="145" class="ts" text-anchor="middle">SIDEWAYS band</text>
+    <text x="560" y="162" class="tm" text-anchor="middle">±0.5 · σ · √h</text>
+    <path d="M120 140 L680 85 L680 40 L120 40 Z" fill="var(--up-soft)"/>
+    <text x="640" y="62" class="t" text-anchor="end" style="fill:var(--up);font-weight:700">UP</text>
+    <path d="M120 140 L680 195 L680 230 L120 230 Z" fill="var(--down-soft)"/>
+    <text x="640" y="220" class="t" text-anchor="end" style="fill:var(--down);font-weight:700">DOWN</text>
+    <line x1="120" y1="252" x2="690" y2="252" class="ar-dn" stroke-dasharray="5 4"/>
+    <text x="300" y="247" class="tm" style="fill:var(--down)">−10% below C_t → drawdown = 1 if the low ever crosses</text>
+    <!-- price path -->
+    <polyline points="40,170 60,160 80,150 100,146 120,140 160,128 200,136 240,118 290,124 340,104 390,112 440,98 500,92 560,80 620,74 680,66" fill="none" stroke="var(--fg)" stroke-width="2"/>
+    <circle cx="120" cy="140" r="4" fill="var(--fg)"/>
+    <circle cx="680" cy="66" r="4" class="fu"/>
+    <text x="128" y="158" class="tm">C_t</text>
+    <text x="30" y="30" class="tm">price</text>
+  </svg>
+  </div>
+  <div class="tw"><table>
+    <thead><tr><th>Target</th><th>Definition</th><th>Why this choice</th></tr></thead>
+    <tbody>
+      <tr><td><b>Direction</b><br><span class="tag mid">3 classes</span></td><td>r = log(C<sub>t+h</sub>/C<sub>t</sub>). UP if r &gt; 0.5·σ<sub>t</sub>·√h, DOWN if r &lt; −0.5·σ<sub>t</sub>·√h, otherwise SIDEWAYS. σ<sub>t</sub> is the standard deviation of the last 60 daily log returns.</td><td>Scaling by the stock's own volatility makes "sideways" mean the same for a calm utility-like stock and for NVDA. k = 0.5 gives roughly balanced classes (about 40% SIDEWAYS).</td></tr>
+      <tr><td><b>Volatility</b><br><span class="tag mid">regression</span></td><td>Log of annualised realised volatility over t+1…t+h, from <b>hourly</b> returns plus the overnight return.</td><td>Hourly data give a much less noisy volatility estimate than h daily returns. The log makes the target close to normally distributed.</td></tr>
+      <tr><td><b>Drawdown</b><br><span class="tag mid">binary</span></td><td>1 if the lowest low in t+1…t+h is more than 10% below C<sub>t</sub>.</td><td>This is the risk question an investor actually asks. It is rare: 4% at 5 sessions and 23% at 40 in training.</td></tr>
+    </tbody></table></div>
+  <p><b>Rows.</b> Evaluation rows use every 5th session, so 5-session labels never overlap within a stock. Training rows use every session (51,250 chart rows). That gives more chart variety, and overlapping labels are fine for fitting but never for scoring.</p>
+  <figure class="wide"><img src="img/eda_labels.jpg" alt="Class balance and base rates by horizon and block" loading="lazy" width="1500" height="350">
+  <figcaption>Label balance on the development blocks. Validation has more DOWN and drawdown cases than training because of the 2022 bear market. At 20 sessions, the drawdown rate is 14% in training and 24% in validation.</figcaption></figure>
+</section>
+
+<!-- 03 LEAKAGE -->
+<section id="leak">
+  <h2><span class="n">03</span>Time blocks and leakage control</h2>
+  <div class="diag">
+  <svg viewBox="0 0 1000 200" role="img" aria-label="Four time blocks in order: training 2016-10 to 2020-12 fits the models, inner 2021 is for early stopping and calibration, validation 2022-2023 for every selection, locked test 2024-01 to 2026-08 opened once. A 40-session purge gap separates each pair of blocks.">
+    <rect x="20" y="50" width="400" height="80" rx="8" class="b"/>
+    <text x="220" y="80" text-anchor="middle" class="th">Training</text>
+    <text x="220" y="100" text-anchor="middle" class="ts">2016-10 → 2020-12</text>
+    <text x="220" y="118" text-anchor="middle" class="tm">fit weights</text>
+    <rect x="440" y="50" width="130" height="80" rx="8" class="b-vi"/>
+    <text x="505" y="80" text-anchor="middle" class="th">Inner</text>
+    <text x="505" y="100" text-anchor="middle" class="ts">2021</text>
+    <text x="505" y="118" text-anchor="middle" class="tm">early stop, calibrate</text>
+    <rect x="590" y="50" width="190" height="80" rx="8" class="b-am"/>
+    <text x="685" y="80" text-anchor="middle" class="th">Validation</text>
+    <text x="685" y="100" text-anchor="middle" class="ts">2022 → 2023</text>
+    <text x="685" y="118" text-anchor="middle" class="tm">every selection</text>
+    <rect x="800" y="50" width="180" height="80" rx="8" class="b-dn"/>
+    <text x="890" y="80" text-anchor="middle" class="th">Locked test</text>
+    <text x="890" y="100" text-anchor="middle" class="ts">2024-01 → 2026-08</text>
+    <text x="890" y="118" text-anchor="middle" class="tm">opened once</text>
+    <g class="tm"><text x="430" y="40" text-anchor="middle">purge</text><text x="580" y="40" text-anchor="middle">purge</text><text x="790" y="40" text-anchor="middle">purge</text></g>
+    <line x1="430" y1="44" x2="430" y2="140" class="ar-dn" stroke-dasharray="3 3"/>
+    <line x1="580" y1="44" x2="580" y2="140" class="ar-dn" stroke-dasharray="3 3"/>
+    <line x1="790" y1="44" x2="790" y2="140" class="ar-dn" stroke-dasharray="3 3"/>
+    <text x="20" y="170" class="ts">Rows per block (evaluation grid): train 10,250 · inner 2,150 · validation 4,600 · test 6,550.</text>
+    <text x="20" y="190" class="ts">Purge = 40 sessions (the longest horizon), so no label window crosses into the next block.</text>
+  </svg>
+  </div>
+  <div class="why"><b>Why four blocks and not three</b>Early stopping and calibration need held-out data. If validation did that job, it would be used twice and stop being a fair selection set. The 2021 "inner" block takes those jobs, so validation is used only to choose between models.</div>
+  <h3>The vault</h3>
+  <p>Once the labels are built, every test label is moved into a <code>VAULT</code> object and replaced by NaN in the working table. Nothing before §23 can read it. The vault opens only after the freeze manifest exists, and every opening is logged: 16 openings over 8 executions, all from re-runs of the same frozen pipeline. Seven leakage tests must pass:</p>
+  <div class="tw"><table>
+    <thead><tr><th>Check</th><th>What it guards against</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td>purge train → inner, inner → val, val → test</td><td>a training label window overlapping a later block's outcomes</td><td><span class="tag ok">3 × passed</span></td></tr>
+      <tr><td>test labels hidden</td><td>any code reading test outcomes before the freeze</td><td><span class="tag ok">passed</span></td></tr>
+      <tr><td>unique stock-dates</td><td>duplicate rows inflating scores</td><td><span class="tag ok">passed</span></td></tr>
+      <tr><td>evaluation rows non-overlapping at 5 sessions</td><td>overlapping labels shrinking confidence intervals</td><td><span class="tag ok">passed</span></td></tr>
+      <tr><td>labels ignore past bars</td><td>a label that changes when history is edited (it must depend only on the future)</td><td><span class="tag ok">passed</span></td></tr>
+    </tbody></table></div>
+  <p>Charts and indicators are also tested for <b>causality</b>. Truncating the future, or perturbing bars after <i>t</i>, must leave the image and the features unchanged.</p>
+</section>
+
+<!-- 04 CHARTS -->
+<section id="charts">
+  <h2><span class="n">04</span>Chart images: the vision models' input</h2>
+  <p>Each row becomes three 224×224 images, drawn by one shared renderer (<code>nav3_core.py</code>). The dashboard runs the same renderer, so training, validation, test and the live app all draw identical pictures.</p>
+  <div class="grid2">
+    <div class="card"><h4>The rendering contract</h4><ul>
+      <li><b>Weekly:</b> 52 candles. The last one is the week in progress, built only from days ≤ t.</li>
+      <li><b>Daily:</b> 63 candles (about 3 months).</li>
+      <li><b>Hourly:</b> 70 candles (10 sessions).</li>
+      <li>Dark theme, teal up and red down candles, volume panel at the bottom.</li>
+      <li><b>No text, axes, dates or tickers.</b></li>
+    </ul></div>
+    <div class="card"><h4>Why no text</h4><p>Any date, price level or ticker in the picture could let a network memorise "which stock, when" instead of learning a shape. With only the candles, whatever it learns has to come from price action.</p>
+    <h4 style="margin-top:10px">Image tests</h4><p>Rendering must be deterministic. A stored image must equal a fresh render. No chart may be blank. Changing bars after <i>t</i> must leave the image unchanged.</p></div>
+  </div>
+  <figure><img src="img/chart_gallery.jpg" alt="Grid of nine model input charts: three examples (DOWN, SIDEWAYS, UP) by three views (weekly, daily, hourly)" loading="lazy" width="900" height="902">
+  <figcaption>What the networks actually see: one training example per 20-day class, each shown in the weekly, daily and hourly views. A human cannot tell UP from DOWN in these pictures, which is part of why the direction signal is small.</figcaption></figure>
+  <div class="prof"><span class="q">Why are your charts worse than simple numbers at volatility?</span>Each chart's price axis is scaled to that chart's own high and low. That erases the absolute size of the moves: a calm stock and a wild stock can produce identical pictures. Volatility is about that size, so the chart models cannot see it. The vertical-rescale augmentation makes it worse, lowering volatility R² by about 0.13 in the ablation. The reports treat this as a design finding for v3.1: draw the charts on a fixed scale.</div>
+</section>
+
+<!-- 05 CV -->
+<section id="cv">
+  <h2><span class="n">05</span>Computer-vision models</h2>
+  <p>The seven networks span the main design choices in vision: trained from scratch versus pretrained, CNN versus transformer, and small versus large. That spread lets the study say <i>which kind</i> of network reads charts best, not just whether one network works.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Network</th><th>Family</th><th>Why it is in the study</th></tr></thead>
+    <tbody>
+      <tr><td><b>jkx_cnn</b></td><td>small CNN from scratch</td><td>Replicates the Jiang, Kelly &amp; Xiu (2023) "(Re-)Imag(in)ing Price Trends" design: the reference point from the literature.</td></tr>
+      <tr><td><b>ResNet-50</b></td><td>classic CNN, ImageNet</td><td>The standard transfer-learning baseline. Also used for the scratch and no-augmentation ablations.</td></tr>
+      <tr><td><b>EfficientNet-B0</b></td><td>small, efficient CNN</td><td>Tests whether a small network is enough. It is also the cheapest to deploy.</td></tr>
+      <tr><td><b>ConvNeXt-Tiny</b></td><td>modern CNN</td><td>A CNN with transformer-era training tricks. <b>Best for direction.</b></td></tr>
+      <tr><td><b>ViT-B/16</b></td><td>vision transformer</td><td>Global attention over 16 px patches, with no built-in locality bias.</td></tr>
+      <tr><td><b>Swin-T</b></td><td>hierarchical transformer</td><td>Windowed attention, a middle ground between CNN and ViT.</td></tr>
+      <tr><td><b>YOLOv8s-cls</b></td><td>YOLO classifier</td><td>The family behind popular "chart pattern" detectors. A ready-made YOLOv8 pattern detector is also tested zero-shot.</td></tr>
+    </tbody></table></div>
+  <h3>Two-step transfer learning</h3>
+  <div class="diag sm">
+  <svg viewBox="0 0 760 210" role="img" aria-label="Three chart views pass through a shared pretrained backbone. Step 1 freezes the backbone and fits a linear probe on its features. Step 2 fine-tunes the whole network with a multi-task head producing direction, volatility and drawdown for four horizons.">
+    <defs><marker id="m5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="ah"/></marker></defs>
+    <rect x="16" y="30" width="80" height="34" rx="6" class="b-up"/><text x="56" y="52" text-anchor="middle" class="t">1W</text>
+    <rect x="16" y="80" width="80" height="34" rx="6" class="b-up"/><text x="56" y="102" text-anchor="middle" class="t">1D</text>
+    <rect x="16" y="130" width="80" height="34" rx="6" class="b-up"/><text x="56" y="152" text-anchor="middle" class="t">1H</text>
+    <rect x="150" y="30" width="170" height="134" rx="8" class="b"/>
+    <text x="235" y="88" text-anchor="middle" class="th">Pretrained backbone</text>
+    <text x="235" y="108" text-anchor="middle" class="ts">shared by all 3 views</text>
+    <line x1="96" y1="47" x2="146" y2="80" class="ar" marker-end="url(#m5)"/>
+    <line x1="96" y1="97" x2="146" y2="97" class="ar" marker-end="url(#m5)"/>
+    <line x1="96" y1="147" x2="146" y2="114" class="ar" marker-end="url(#m5)"/>
+    <rect x="380" y="30" width="150" height="56" rx="8" class="b-vi"/>
+    <text x="455" y="54" text-anchor="middle" class="th">Step 1: frozen</text>
+    <text x="455" y="73" text-anchor="middle" class="ts">features → linear probe</text>
+    <rect x="380" y="108" width="150" height="56" rx="8" class="b-am"/>
+    <text x="455" y="132" text-anchor="middle" class="th">Step 2: fine-tune</text>
+    <text x="455" y="151" text-anchor="middle" class="ts">all weights train</text>
+    <line x1="320" y1="70" x2="376" y2="58" class="ar" marker-end="url(#m5)"/>
+    <line x1="320" y1="124" x2="376" y2="136" class="ar" marker-end="url(#m5)"/>
+    <rect x="590" y="30" width="155" height="134" rx="8" class="b"/>
+    <text x="667" y="60" text-anchor="middle" class="th">Multi-task head</text>
+    <text x="667" y="84" text-anchor="middle" class="ts">direction (CE)</text>
+    <text x="667" y="104" text-anchor="middle" class="ts">+ 0.5 × volatility (MSE)</text>
+    <text x="667" y="124" text-anchor="middle" class="ts">+ 0.5 × drawdown (BCE)</text>
+    <text x="667" y="148" text-anchor="middle" class="tm">× 4 horizons</text>
+    <line x1="530" y1="58" x2="586" y2="80" class="ar" marker-end="url(#m5)"/>
+    <line x1="530" y1="136" x2="586" y2="114" class="ar" marker-end="url(#m5)"/>
+    <text x="16" y="196" class="ts">H5 tests whether step 2 beats step 1: fine-tuning won in 9 of 18 tests.</text>
+  </svg>
+  </div>
+  <h3>Training recipe (identical for all seven)</h3>
+  <ul>
+    <li><b>Optimiser:</b> AdamW with weight decay 0.05, 5% linear warm-up then cosine decay, gradient clipping at 1.0, bfloat16, batch of 64 rows (192 images).</li>
+    <li><b>Tuning:</b> a two-value learning-rate probe per model. Each value trains for one epoch on 25% of the training rows, and the one with the lower inner-block loss wins.</li>
+    <li><b>Early stopping:</b> up to 6 epochs, patience 2, stopping on the <b>2021 inner loss</b>, never on validation.</li>
+    <li><b>No class weights:</b> they would distort the calibrated probabilities.</li>
+  </ul>
+  <div class="grid2">
+    <div class="card ok"><h4>Allowed augmentation</h4><ul><li>Vertical rescale ±5% and shift ±4%, because the price scale is arbitrary.</li><li>Dropping up to 8% of the oldest bars. The newest bars are never cut.</li><li>Brightness ±10% and light pixel noise.</li></ul></div>
+    <div class="card no"><h4>Forbidden augmentation</h4><ul><li><b>Horizontal flip:</b> it reverses time.</li><li><b>Vertical flip:</b> it turns rallies into crashes.</li><li>Random crops that cut the newest bars, which carry the decision.</li></ul></div>
+  </div>
+  <figure class="wide"><img src="img/cv_training_curves.jpg" alt="Training and inner loss curves per CV model by epoch" loading="lazy" width="2000" height="201">
+  <figcaption>Training loss falls (blue) while the inner-block loss rises (orange) from epoch 2 onward, for every network. All of them <b>peak after one epoch</b>. The networks memorise the training charts quickly, and early stopping keeps the epoch-1 weights. Low signal-to-noise is the expected situation for return prediction.</figcaption></figure>
+  <h3>Which view carries the signal?</h3>
+  <figure class="wide"><img src="img/cv_view_ablation.jpg" alt="View ablation: macro-F1, R2 and AUC for daily, hourly, weekly and all three views per backbone" loading="lazy" width="1500" height="337">
+  <figcaption>The view ablation uses frozen probes on validation. Combining all three views (W+D+H) beats any single timeframe on every target, which justifies feeding three charts instead of one.</figcaption></figure>
+  <h3>What the networks look at</h3>
+  <figure><img src="img/cv_gradcam.jpg" alt="Grad-CAM heatmaps for ResNet-50 and ViT on validation charts" loading="lazy" width="1000" height="1001">
+  <figcaption>Grad-CAM (red marks the most sensitive region). ResNet-50 focuses on recent candles, volume spikes and turning points. The ViT rows come out blank because Grad-CAM needs convolutional feature maps, so this method does not explain a transformer well. Read the maps as sensitivity, not as proof of reasoning.</figcaption></figure>
+  <h3>The ready-made YOLOv8 pattern detector (zero-shot)</h3>
+  <figure class="wide"><img src="img/yolo_detections.jpg" alt="YOLOv8 pattern detector boxes such as W_Bottom and head and shoulders on weekly AAPL charts" loading="lazy" width="1500" height="385">
+  <figcaption>A public YOLOv8 model trained to box "W bottom" and "head and shoulders" patterns, run on our charts without retraining. It finds the shapes it was trained on. It is reported as a zero-shot demonstration of off-the-shelf "pattern AI", separate from the seven trained forecasting networks.</figcaption></figure>
+</section>
+
+<!-- 06 TEXT -->
+<section id="text">
+  <h2><span class="n">06</span>SEC filings: getting the timestamps right</h2>
+  <p>A filing can only help a forecast once the market can read it, so the hardest part of the text pipeline is <b>when</b>.</p>
+  <div class="diag">
+  <svg viewBox="0 0 1000 190" role="img" aria-label="Filing timeline: the SEC accepts the filing, plus 5 minutes for public dissemination and 30 minutes for processing gives the availability time; the trade enters at the open of the next hourly bar, or the next day's 09:30 open if after 15:30.">
+    <defs><marker id="m6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="ah"/></marker></defs>
+    <line x1="30" y1="100" x2="970" y2="100" class="ar" marker-end="url(#m6)"/>
+    <circle cx="120" cy="100" r="7" class="fv"/>
+    <text x="120" y="70" text-anchor="middle" class="th">Accepted</text>
+    <text x="120" y="130" text-anchor="middle" class="ts">time read from the SGML header</text>
+    <text x="120" y="148" text-anchor="middle" class="tm">(JSON time wrong ~70% of the time)</text>
+    <circle cx="330" cy="100" r="5" fill="var(--muted)"/>
+    <text x="330" y="70" text-anchor="middle" class="t">+5 min</text>
+    <text x="330" y="130" text-anchor="middle" class="ts">public dissemination</text>
+    <circle cx="530" cy="100" r="7" class="fa"/>
+    <text x="530" y="70" text-anchor="middle" class="th">Available</text>
+    <text x="530" y="130" text-anchor="middle" class="ts">+30 min processing</text>
+    <circle cx="780" cy="100" r="7" class="fu"/>
+    <text x="780" y="70" text-anchor="middle" class="th">Entry</text>
+    <text x="780" y="130" text-anchor="middle" class="ts">open of the next hourly bar</text>
+    <text x="780" y="148" text-anchor="middle" class="tm">after 15:30 → next 09:30 open</text>
+    <text x="30" y="30" class="tm">NO LOOK-AHEAD: a model may use the filing only from "Available"; returns are measured from "Entry".</text>
+  </svg>
+  </div>
+  <div class="why"><b>Why so careful</b>About 70% of EDGAR's JSON acceptance times are New York wall-clock times mislabelled as UTC. Trusting them would date some filings hours too early, and a model would then "predict" a price reaction it had already seen. Reading the SGML header fixes this, and the 35-minute buffer is conservative.</div>
+  <h3>Cleaning and sections</h3>
+  <ul>
+    <li>HTML is converted to text, with scripts, inline-XBRL headers and mostly-numeric tables removed.</li>
+    <li><b>10-K:</b> Item 7, MD&amp;A. <b>10-Q:</b> Part I Item 2, MD&amp;A. Banks often put the MD&amp;A in Exhibit 13, which is fetched too.</li>
+    <li><b>8-K:</b> the item text plus the first EX-99 exhibit (usually the press release), keeping the item codes (2.02 results, 5.02 officers and so on).</li>
+    <li>The model input is tagged <code>[form] [section] text</code>.</li>
+  </ul>
+  <h3>Two ways text meets prices</h3>
+  <div class="grid2">
+    <div class="card"><h4>Event rows (§14)</h4><p>Every filing is its own row. The question is what happens after <i>this</i> filing. This is the setting language models are normally tested in, and it drives the event study.</p></div>
+    <div class="card"><h4>Panel rows (§19)</h4><p>Each daily decision row gets the latest 10-K/10-Q (if under 90 sessions old) and the latest 8-K (if under 20 sessions old). This puts CV, NLP and fusion on <b>identical rows</b>, the only fair way to compare them.</p></div>
+  </div>
+  <h3>Event study: do filings move prices? (H7)</h3>
+  <figure class="wide"><img src="img/event_study_dev.jpg" alt="Event study: mean absolute abnormal two-day move by form, sector by form heatmap, and 8-K items ranked" loading="lazy" width="1600" height="366">
+  <figcaption>Development blocks. Moves are measured in "normal-day units", the absolute 2-day abnormal return divided by the stock's usual abnormal volatility. Filing days move prices about twice as much as non-filing days, with 10-Qs moving them most. Among 8-K items, 2.02 (results) and 2.05 (exit and restructuring costs) dominate. H7 was <span class="tag ok">supported</span> on the test (2/2). On the locked test, the mean |z| was 1.64 for 10-Qs (407 filings), 1.52 for 10-Ks (145) and 1.37 for 8-Ks (1,613), against 0.70 on non-filing days.</figcaption></figure>
+</section>
+
+<!-- 07 NLP -->
+<section id="nlp">
+  <h2><span class="n">07</span>Language models</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Model</th><th>What it is</th><th>Why it is in the study</th></tr></thead>
+    <tbody>
+      <tr><td><b>TF-IDF + logistic/ridge</b></td><td>bag of words</td><td>The classic text baseline. It is transparent, since you can read which words matter (Q8).</td></tr>
+      <tr><td><b>FinBERT</b></td><td>BERT trained on financial text</td><td>Domain pre-training on finance.</td></tr>
+      <tr><td><b>SEC-BERT</b></td><td>BERT trained on SEC filings</td><td>Domain pre-training on exactly this kind of document.</td></tr>
+      <tr><td><b>RoBERTa-large</b></td><td>large general encoder</td><td>Tests whether size beats domain knowledge.</td></tr>
+      <tr><td><b>Longformer</b></td><td>4,096-token window</td><td>MD&amp;A sections are long, and this tests whether more context helps.</td></tr>
+      <tr><td><b>DeBERTa-v3-large</b></td><td>strongest general encoder</td><td>State of the art on language-understanding benchmarks. Its fine-tuning was <b>unstable</b> at our data size.</td></tr>
+      <tr><td><b>FinGPT</b></td><td>LLM (Llama 2 based), frozen in 4-bit</td><td>Tests whether a generative financial LLM adds anything as a feature extractor.</td></tr>
+    </tbody></table></div>
+  <p>Fine-tuning mirrors the vision setup:</p>
+  <ul>
+    <li>the same multi-task head and loss, with masked mean pooling;</li>
+    <li>512 tokens per filing (Longformer 4,096);</li>
+    <li>AdamW with weight decay 0.01 and 6% warm-up;</li>
+    <li>a two-value learning-rate probe on the inner block.</li>
+  </ul>
+  <p>The TF-IDF + logistic/ridge baseline is not a neural network, so the count is "6 language models plus TF-IDF".</p>
+  <div class="prof"><span class="q">Why does TF-IDF beat the transformers?</span>There are only a few thousand training filings. Every encoder peaks after one epoch, and DeBERTa's early-stopping loss stayed far above the others, a sign of unstable fine-tuning at this data size. Large networks need more labelled events than ten years of 50 companies can give. For DeBERTa, the frozen features are the fairer reading.</div>
+  <div class="prof"><span class="q">Isn't the text signal just the company name?</span>Mostly, yes, and the study shows it. Against no-text baselines on the same filings (company, numbers, technical LightGBM), the language models' drawdown signal <b>vanished (H2c, 0 of 4 drawdown tasks)</b>. This is shortcut learning: the models learn <i>which company filed and when</i>, and a company's usual volatility predicts its risk.</div>
+</section>
+
+<!-- 08 EVAL -->
+<section id="eval">
+  <h2><span class="n">08</span>Baselines, metrics and statistics</h2>
+  <h3>Baselines: every deep model must beat these</h3>
+  <ul>
+    <li><b>Prior:</b> always predict the training class shares.</li>
+    <li><b>Momentum:</b> recent return → direction.</li>
+    <li><b>HAR and trailing volatility:</b> volatility today predicts volatility tomorrow.</li>
+    <li><b>Technical LightGBM:</b> technical indicators such as RSI, ATR, moving averages and trailing volatility, fed to gradient-boosted trees.</li>
+    <li><b>Random-weight CNN and label-shuffle controls:</b> these show what "no learning" looks like.</li>
+  </ul>
+  <h3>Metrics and why each one</h3>
+  <div class="tw"><table>
+    <thead><tr><th>Target</th><th>Primary</th><th>Secondary</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Direction</td><td>Macro-F1</td><td>log loss, balanced accuracy, accuracy</td><td>Plain accuracy rewards always saying SIDEWAYS. Macro-F1 forces the model to find UP and DOWN moves.</td></tr>
+      <tr><td>Volatility</td><td>R²</td><td>QLIKE, Spearman, MAE</td><td>QLIKE is the standard volatility-forecast loss, and it is robust to noisy targets.</td></tr>
+      <tr><td>Drawdown</td><td>ROC-AUC</td><td>PR-AUC, Brier skill, ECE</td><td>The event is rare. AUC measures ranking, and Brier skill and ECE measure whether the probabilities are honest.</td></tr>
+    </tbody></table></div>
+  <h3>How significance is decided</h3>
+  <ul>
+    <li><b>Paired month-block bootstrap:</b> whole months are resampled, because returns within a month are correlated. Resampling rows would make the intervals too narrow.</li>
+    <li><b>Holm correction</b> within each hypothesis family of 12 tasks, because testing 12 tasks at 5% gives about one false positive by luck.</li>
+    <li><b>Skill over a shuffled null:</b> direction skill is measured as macro-F1 above the same model on shuffled labels. This removes the class-balance effect.</li>
+    <li><b>Re-calibration on the inner block:</b> temperature scaling (direction), linear (volatility) and Platt (drawdown), so the probabilities mean what they say.</li>
+  </ul>
+</section>
+
+<!-- 09 FUSION -->
+<section id="fusion">
+  <h2><span class="n">09</span>Fusion and the Monte Carlo price range</h2>
+  <div class="diag">
+  <svg viewBox="0 0 1000 250" role="img" aria-label="Late fusion: the top-3 CV ensemble and top-3 NLP ensemble are blended with a weight w chosen on validation from 0, 0.25, 0.5, 0.75, 1. Early fusion: frozen CV and NLP features are concatenated into one linear model. The tech reference: LightGBM on technical indicators plus CV and NLP features.">
+    <defs><marker id="m9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="ah"/></marker></defs>
+    <text x="20" y="24" class="tm">LATE FUSION (fusion_late_top3, deploy_recipe)</text>
+    <rect x="20" y="36" width="170" height="44" rx="8" class="b-up"/><text x="105" y="63" text-anchor="middle" class="t">top-3 CV ensemble</text>
+    <rect x="20" y="96" width="170" height="44" rx="8" class="b-vi"/><text x="105" y="123" text-anchor="middle" class="t">top-3 NLP ensemble</text>
+    <circle cx="280" cy="88" r="26" class="b-am"/><text x="280" y="93" text-anchor="middle" class="th">w</text>
+    <line x1="190" y1="58" x2="256" y2="78" class="ar" marker-end="url(#m9)"/>
+    <line x1="190" y1="118" x2="256" y2="98" class="ar" marker-end="url(#m9)"/>
+    <text x="210" y="56" class="tm">× w</text><text x="200" y="138" class="tm">× (1−w)</text>
+    <rect x="350" y="66" width="140" height="44" rx="8" class="b"/><text x="420" y="93" text-anchor="middle" class="t">re-calibrate (2021)</text>
+    <line x1="306" y1="88" x2="346" y2="88" class="ar" marker-end="url(#m9)"/>
+    <text x="20" y="168" class="ts">w ∈ {0, .25, .5, .75, 1} per task, chosen on validation. w = 1 means "charts only", so the chosen weights are themselves an answer to Q1.</text>
+    <text x="560" y="24" class="tm">EARLY FUSION (fusion_early)</text>
+    <rect x="560" y="36" width="150" height="44" rx="8" class="b-up"/><text x="635" y="63" text-anchor="middle" class="t">CV features</text>
+    <rect x="560" y="96" width="150" height="44" rx="8" class="b-vi"/><text x="635" y="123" text-anchor="middle" class="t">NLP features</text>
+    <rect x="770" y="66" width="200" height="44" rx="8" class="b"/><text x="870" y="93" text-anchor="middle" class="t">one linear model / task</text>
+    <line x1="710" y1="58" x2="766" y2="80" class="ar" marker-end="url(#m9)"/>
+    <line x1="710" y1="118" x2="766" y2="96" class="ar" marker-end="url(#m9)"/>
+    <text x="20" y="206" class="tm">REFERENCE (fusion_tech)</text>
+    <text x="20" y="228" class="ts">LightGBM on technical indicators + the same CV and NLP features. This is the strongest model for volatility, and most of its gain comes from the filing calendar (see 11).</text>
+  </svg>
+  </div>
+  <h3>Deploy recipe: what the dashboard runs</h3>
+  <p>The dashboard always runs the top-3 CV ensemble per task. When a filing is fresh (pasted in the app, or less than 5 sessions old in the study), it is blended with the top-3 <b>deployable</b> NLP models (TF-IDF, or fine-tuned encoders with at most 600M parameters) using the validation-chosen weights. FinGPT and DeBERTa-large are excluded from deployment because of their size and cost.</p>
+  <div class="why"><b>No-call rule</b>A direction call (UP, SIDEWAYS or DOWN) is printed only for horizons where the recipe's direction skill was significant on the locked test. The app never claims more than the test supports.</div>
+  <h3>Monte Carlo price paths</h3>
+  <p>Twenty daily log returns are simulated as drift plus scale × standardised noise:</p>
+  <ul>
+    <li>The <b>scale</b> comes from the recipe's 20-day volatility forecast.</li>
+    <li>The <b>drift</b> is solved so that the simulated DOWN/SIDEWAYS/UP shares at day 20 match the recipe's probabilities.</li>
+    <li><b>Intraday lows</b> come from the exact Brownian-bridge minimum.</li>
+  </ul>
+  <p>The bands under-covered at first (74% and 83% for the nominal 80% and 90% bands). A volatility scale of 1.25 was then chosen <b>on validation</b>, and on the test the 80% and 90% bands contained the realised outcome <b>82.6% and 90.8%</b> of the time.</p>
+  <figure><img src="img/mc_example_val.jpg" alt="Monte Carlo fan chart example for ABT with 5-95 and 25-75 percent bands" loading="lazy" width="900" height="396">
+  <figcaption>One validation example (ABT, 2022-01-06). The dashboard draws the same fan on top of the live candles.</figcaption></figure>
+</section>
+
+<!-- 10 TEST -->
+<section id="test">
+  <h2><span class="n">10</span>Freeze and the locked test</h2>
+  <p>Before the vault opens, a <b>freeze manifest</b> records:</p>
+  <ul>
+    <li>every selection: best models, top-3 members, fusion weights and the Monte Carlo tail setting;</li>
+    <li>the SHA-256 of every prediction file (test predictions already exist at this point, but their labels do not);</li>
+    <li>the configuration hash, the data hash, the shared-code hash and the package versions.</li>
+  </ul>
+  <p>§23 refuses to run without the manifest. A reproducibility check compares every re-run against the original. It reported 11 of 11 identical.</p>
+  <h3>Pre-registered hypotheses on the test</h3>
+  <div class="tw"><table>
+    <thead><tr><th>Hypothesis</th><th>Tests</th><th>Supported</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr><td>H1 CV has skill</td><td class="num">12</td><td class="num">6</td><td><span class="tag ph">partly</span></td></tr>
+      <tr><td>H2 NLP has skill (events)</td><td class="num">12</td><td class="num">4</td><td><span class="tag ph">partly</span></td></tr>
+      <tr><td>H2b NLP has skill (panel)</td><td class="num">12</td><td class="num">4</td><td><span class="tag ph">partly</span></td></tr>
+      <tr><td>H3 fusion beats the better single modality</td><td class="num">12</td><td class="num">6</td><td><span class="tag ph">partly</span></td></tr>
+      <tr><td>H4 top-3 + top-3 beats top-3 CV</td><td class="num">12</td><td class="num">3</td><td><span class="tag ph">partly</span></td></tr>
+      <tr><td>H5 fine-tuning beats frozen</td><td class="num">18</td><td class="num">9</td><td><span class="tag ph">partly</span></td></tr>
+      <tr><td>H6 sector-specific rankings</td><td class="num">3</td><td class="num">2</td><td><span class="tag ph">partly</span></td></tr>
+      <tr><td>H7 filings move prices</td><td class="num">2</td><td class="num">2</td><td><span class="tag ok">supported</span></td></tr>
+    </tbody></table></div>
+  <p>"Skill" in H1 and H2 means beating the <b>prior and shuffled-label null</b>, not beating strong baselines. That gap is why the post-hoc addenda in section 11 were needed.</p>
+</section>
+
+<!-- 11 POSTHOC -->
+<section id="posthoc">
+  <h2><span class="n">11</span>Post-hoc addenda: making it rigorous</h2>
+  <div class="posthoc"><b>Everything in this section was added after the test was opened.</b> It is labelled post-hoc everywhere. All models were fitted on training and tuned on 2021 only, and baselines were chosen on validation. The original tables were not changed, so a reader can see both.</div>
+  <div class="tw"><table>
+    <thead><tr><th>Phase</th><th>Question a professor would ask</th><th>What we did</th><th>Answer</th></tr></thead>
+    <tbody>
+      <tr><td><b>A</b></td><td>Your baselines are weak. Do charts and text beat <i>strong</i> numbers?</td><td>No-text event baselines (company, simple, technical LightGBM), H1c/H2c/H3c, incremental value H8</td><td>Volatility and drawdown: numbers win. NLP drawdown signal vanishes (0/4). Adding features to LightGBM helps volatility (+0.06 to +0.09 R²).</td></tr>
+      <tr><td><b>A2</b></td><td>Is that volatility gain just the earnings calendar or the company?</td><td>Filing-date columns (H8d) and company one-hot controls (H8e/f); a fair direction test H1d against each model's own shuffled null</td><td>The calendar alone gives the gain (4/4). The words add about +0.013 R² (2/4), and only 1/4 survives beyond calendar + company. CV direction is better than baseline in 1/4.</td></tr>
+      <tr><td><b>A2d</b></td><td>Show accuracy, balanced accuracy and calibration too</td><td>Secondary-metric tables</td><td>CV direction accuracy is about the majority class (41.6% vs 42.0%). The edge is in finding UP and DOWN moves.</td></tr>
+      <tr><td><b>A3 / A3b</b></td><td>Did you try combining networks? Is there anything in the words themselves?</td><td>63 combinations per modality (H9), Lazy Prices text change and Loughran-McDonald tone (H10), a reaction-size regression with company control (H11)</td><td>CV combinations win 5/12 (mostly volatility), NLP combinations 0/12, cross-modal 2/12 (drawdown). The words explain reaction <b>size</b> beyond company: <b>+0.043 R²</b> [0.029, 0.058].</td></tr>
+    </tbody></table></div>
+  <div class="prof"><span class="q">Isn't adding analyses after the test data snooping?</span>It would be if the original results were replaced or the new ones were presented as confirmatory. Here they are additions, labelled post-hoc, built only from training, inner and validation fits, and the pre-registered tables stay unchanged. A confirmatory <b>v3.1 protocol</b> was written and hashed for a new forward-test period. It includes fixed-scale charts, several seeds, stabilised fine-tuning and QLoRA.</div>
+  <div class="prof"><span class="q">Why is the cross-modal grid's volatility below H4?</span>Its members were picked on validation, and picking from many combinations over-fits validation. That is a reason to prefer the simple pre-registered top-3 + top-3 recipe.</div>
+</section>
+
+<!-- 12 FINDINGS -->
+<section id="findings">
+  <h2><span class="n">12</span>What we found, in plain words</h2>
+  <div class="grid2">
+    <div class="card ok"><h4>Charts see a little direction</h4><p>There is a small but statistically supported direction signal at 5 and 10 sessions: about <b>+0.03 macro-F1</b> over a shuffled null. ConvNeXt-Tiny is the best single network for direction. Against fair baselines, charts win at 1 of 4 horizons (5 sessions).</p></div>
+    <div class="card no"><h4>Numbers beat pictures for risk</h4><p>For volatility and drawdown, trailing volatility and technical indicators beat the chart models in all 8 tasks. Volatility R² is about 0.08 for CV versus 0.30–0.37 for the numbers, and drawdown AUC about 0.60 versus 0.69–0.70. The likely cause is the per-chart price scaling.</p></div>
+    <div class="card no"><h4>Text models mostly learn shortcuts</h4><p>The language models showed no direction or volatility skill of their own. Their drawdown signal disappears once company and timing are controlled. TF-IDF is competitive with the large transformers.</p></div>
+    <div class="card ok"><h4>Filings do move prices</h4><p>Filing days move prices about <b>2×</b> as much as normal days, with 10-Qs moving them most. The words explain part of <b>how big</b> the reaction is (+0.043 R² beyond company), but not its direction.</p></div>
+    <div class="card"><h4>Combining helps a little, and where it helps matters</h4><p>Combining vision networks helps volatility. Combining language models never helps. Adding text to charts helps only drawdown, in 2 of 12 tasks.</p></div>
+    <div class="card"><h4>Probabilities rank risk, levels are rough</h4><p>Drawdown AUC is 0.54–0.63, but Brier skill is ≤ 0 against the training base rate. Use the drawdown numbers as relative risk. The Monte Carlo bands are well calibrated after the 1.25 scale.</p></div>
+  </div>
+  <div class="why"><b>The one-sentence thesis</b>Leakage-free testing shows that vision models extract a small direction signal from charts, while simple numbers beat both charts and filings for risk. The text "signal" is mostly which company filed and when, yet filings themselves clearly move prices.</div>
+</section>
+
+<!-- 13 DASHBOARD -->
+<section id="dash">
+  <h2><span class="n">13</span>The Streamlit dashboard</h2>
+  <p>The dashboard turns the frozen study into a tool. It runs <b>exactly</b> the recipe that was tested: the code that draws charts and makes predictions is the notebook's own <code>nav3_core.py</code>, and §24 checks numerically that both give the same answers (<code>dashboard_parity.csv</code>).</p>
+  <div class="diag">
+  <svg viewBox="0 0 1000 330" role="img" aria-label="Dashboard flow: a ticker or screenshots plus optional filing text go in; screenshots are read only for ticker and date; live bars come from Yahoo Finance; charts are redrawn in the training format; the frozen deploy recipe runs CV and optionally NLP; the no-call rule and Monte Carlo produce the verdict, summary, cone chart and patterns; an Ask AI tab answers questions with Gemini using only the study facts and the numbers on screen.">
+    <defs><marker id="m13" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="ah"/></marker></defs>
+    <text x="20" y="22" class="tm">USER INPUT</text>
+    <rect x="20" y="32" width="170" height="50" rx="8" class="b"/><text x="105" y="54" text-anchor="middle" class="t">Ticker</text><text x="105" y="72" text-anchor="middle" class="tm">or pick from 50</text>
+    <rect x="20" y="96" width="170" height="50" rx="8" class="b"/><text x="105" y="118" text-anchor="middle" class="t">Screenshots</text><text x="105" y="136" text-anchor="middle" class="tm">optional, OCR'd</text>
+    <rect x="20" y="160" width="170" height="50" rx="8" class="b"/><text x="105" y="182" text-anchor="middle" class="t">Filing summary</text><text x="105" y="200" text-anchor="middle" class="tm">optional 10-K/10-Q/8-K</text>
+    <rect x="240" y="64" width="180" height="70" rx="8" class="b"/><text x="330" y="92" text-anchor="middle" class="th">Yahoo Finance</text><text x="330" y="112" text-anchor="middle" class="ts">3y daily + 60d hourly, live</text>
+    <line x1="190" y1="57" x2="236" y2="88" class="ar" marker-end="url(#m13)"/>
+    <line x1="190" y1="121" x2="236" y2="110" class="ar" marker-end="url(#m13)"/>
+    <text x="196" y="160" class="tm">ticker + date only</text>
+    <rect x="470" y="64" width="180" height="70" rx="8" class="b-up"/><text x="560" y="92" text-anchor="middle" class="th">Redraw 1W/1D/1H</text><text x="560" y="112" text-anchor="middle" class="ts">training format, 224 px</text>
+    <line x1="420" y1="99" x2="466" y2="99" class="ar" marker-end="url(#m13)"/>
+    <rect x="700" y="40" width="280" height="118" rx="8" class="b-dn"/>
+    <text x="840" y="66" text-anchor="middle" class="th">Frozen deploy recipe</text>
+    <text x="840" y="88" text-anchor="middle" class="ts">top-3 CV ensemble per task</text>
+    <text x="840" y="108" text-anchor="middle" class="ts">+ top-3 deployable NLP if text given</text>
+    <text x="840" y="130" text-anchor="middle" class="ts">validation weights, 2021 calibration</text>
+    <text x="840" y="148" text-anchor="middle" class="tm">low-memory mode frees each NLP model</text>
+    <line x1="650" y1="99" x2="696" y2="99" class="ar" marker-end="url(#m13)"/>
+    <path d="M190 185 H680 V140 H696" class="ar" marker-end="url(#m13)"/>
+    <rect x="700" y="190" width="280" height="50" rx="8" class="b-am"/><text x="840" y="212" text-anchor="middle" class="th">No-call rule + Monte Carlo</text><text x="840" y="230" text-anchor="middle" class="tm">4,000 paths, scale 1.25</text>
+    <path d="M840 158 V186" class="ar" marker-end="url(#m13)"/>
+    <text x="20" y="262" class="tm">SCREEN</text>
+    <rect x="20" y="272" width="150" height="44" rx="8" class="b"/><text x="95" y="298" text-anchor="middle" class="t">Verdict card</text>
+    <rect x="182" y="272" width="170" height="44" rx="8" class="b"/><text x="267" y="298" text-anchor="middle" class="t">Summary in plain words</text>
+    <rect x="364" y="272" width="170" height="44" rx="8" class="b"/><text x="449" y="298" text-anchor="middle" class="t">4 horizons + risk</text>
+    <rect x="546" y="272" width="200" height="44" rx="8" class="b"/><text x="646" y="298" text-anchor="middle" class="t">Candles + cone + patterns</text>
+    <rect x="758" y="272" width="222" height="44" rx="8" class="b-vi"/><text x="869" y="292" text-anchor="middle" class="t">Ask AI (Gemini)</text><text x="869" y="308" text-anchor="middle" class="tm">answers from study + screen only</text>
+    <path d="M840 240 V256 H95 V268" class="ar" marker-end="url(#m13)"/>
+  </svg>
+  </div>
+  <div class="grid2">
+    <div class="card"><h4>Why charts are redrawn</h4><p>A broker screenshot has different colours, fonts, indicators and zoom from the training charts. The robustness tests (§12.7) show those differences can move predictions. So screenshots are read only for the ticker and date, and the models always see the exact training format.</p></div>
+    <div class="card"><h4>Why live data works with frozen models</h4><p>The models learned what a chart looks like, so they only need the latest window of bars. Yahoo data are fetched when you click Analyse. Dates after 2026-08 are new data outside the test, so the evidence badges describe the 2024–26 test, not live performance.</p></div>
+    <div class="card"><h4>Honesty features</h4><ul><li>Every number has an evidence badge showing whether it was proven on the test.</li><li>Candlestick patterns are shown as <b>descriptive only</b>: they are not used by the models and not tested.</li><li>The no-call rule applies.</li></ul></div>
+    <div class="card"><h4>Engineering details</h4><ul><li>Dark and light themes, and a black chart panel.</li><li>A Reset-view button for the chart.</li><li><b>Low-memory mode:</b> loads one NLP model at a time, so it runs on a 15 GB laptop without a GPU.</li><li><b>Ask AI:</b> a free Gemini key, kept for the session only.</li></ul></div>
+  </div>
+</section>
+
+<!-- 14 REPORTS -->
+<section id="reports">
+  <h2><span class="n">14</span>The three reports</h2>
+  <div class="grid2">
+    <div class="card"><h4>Computer Vision report</h4><ul><li>Chart design and the seven networks.</li><li>Training curves, leaderboard, view ablation, Grad-CAM, robustness.</li><li>Sectors (H6) and the fair direction comparison (H1d).</li><li>Secondary metrics (5b), combinations (H9a).</li><li>The scaling design finding, ethics (AGPL for YOLOv8).</li></ul></div>
+    <div class="card"><h4>NLP report</h4><ul><li>Opens with the event study (H7).</li><li>Point-in-time text, the six models, training stability (DeBERTa).</li><li>Shortcut learning (H2c), calendar and company controls (H8d–f).</li><li>Lazy Prices and Loughran-McDonald (H10), H11 with company control.</li><li>Ethics: SEC fair access, Llama 2 licence.</li></ul></div>
+    <div class="card"><h4>Multimodal report</h4><ul><li>Q1 and Q10: CV vs NLP vs fusion on identical rows.</li><li>Late, early and tech fusion, H3/H4, cross-modal grid (H9c).</li><li>Monte Carlo coverage.</li><li>The dashboard recipe and the no-call rule.</li><li>Hypothesis register and the v3.1 protocol (section 10).</li></ul></div>
+  </div>
+  <p>Every report text is <b>generated from the run's own result files</b>, so the PDFs cannot drift from the numbers. The final versions are the Phase A3b run, frozen in <code>Downloads\NEXUS_Alpha_v3_FINAL_PhaseA3b</code>.</p>
+</section>
+
+<!-- 15 LIMITS -->
+<section id="limits">
+  <h2><span class="n">15</span>Limitations and future work</h2>
+  <div class="grid2">
+    <div class="card no"><h4>Limitations</h4><ul>
+      <li>50 large surviving US stocks (survivorship bias)</li>
+      <li>One decade, with a regime change between validation (2022 bear market) and test (strong 2024–26)</li>
+      <li>One training seed per model</li>
+      <li>Prices not dividend-adjusted</li>
+      <li>Direction labels are noisy, and a 3-class band hides magnitude</li>
+      <li>MD&amp;A extraction is heuristic, and FinGPT is frozen</li>
+      <li>Event reactions mix filings with same-day news</li>
+      <li>No trading costs or portfolio test (this is a forecasting study)</li>
+    </ul></div>
+    <div class="card ok"><h4>Future work (v3.1, pre-registered)</h4><ul>
+      <li>New forward test period, several seeds</li>
+      <li><b>Fixed-scale charts</b>, so volatility becomes visible to the CNNs</li>
+      <li>Stabilised fine-tuning, QLoRA for FinGPT</li>
+      <li>Minute-stamped news next to filings</li>
+      <li>Small caps and delisted stocks</li>
+      <li>Walk-forward refits each year</li>
+      <li>Other image encodings (Gramian angular fields)</li>
+      <li>Position sizing from the volatility and drawdown heads, with costs</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- 16 VIVA -->
+<section id="viva">
+  <h2><span class="n">16</span>Viva practice: likely questions</h2>
+  <p>Try answering each question out loud before opening it.</p>
+  <div class="tools"><button type="button" id="openAll">Open all answers</button><button type="button" id="closeAll">Close all</button></div>
+  <details class="qa"><summary>What is the research gap?</summary><div>No study compares 7 vision and 6 language models on identical point-in-time rows across 4 horizons, 3 targets and 5 sectors, with a test period after all language-model pre-training cut-offs.</div></details>
+  <details class="qa"><summary>How did you prevent leakage? Give at least five mechanisms.</summary><div><ul><li>Decisions are made at the close.</li><li>Images and indicators are tested by truncation and future-bar perturbation.</li><li>A 40-session purge separates the blocks.</li><li>Test labels sit in a vault, opened only after a hashed freeze.</li><li>Filings are usable only after acceptance + 35 min, with entry at the next hourly open.</li><li>The test period comes after all language-model cut-offs.</li></ul></div></details>
+  <details class="qa"><summary>Why macro-F1 and not accuracy?</summary><div>Always predicting SIDEWAYS gives about 42% accuracy. Our CV accuracy is 41.6%, about the same. Macro-F1 averages F1 over the three classes, so it rewards finding UP and DOWN moves. The edge is there, measured as skill over each model's own shuffled-label null.</div></details>
+  <details class="qa"><summary>Your CV model beats the baselines by up to 0.14 macro-F1. Is that fair?</summary><div>No. The baselines mostly predict one class, which macro-F1 punishes. The fair number is H1d, skill over each model's own shuffled null: CV is better than the baseline in 1 of 4 horizons.</div></details>
+  <details class="qa"><summary>Why did every network peak after one epoch?</summary><div>Return prediction has a very low signal-to-noise ratio. The networks memorise the training charts quickly (training loss falls) and generalise worse afterwards (inner loss rises). Early stopping on 2021 keeps the epoch-1 weights. This is expected behaviour, not a bug.</div></details>
+  <details class="qa"><summary>What does transfer learning buy you here?</summary><div>ImageNet features detect edges, shapes and textures, and candlesticks are shapes. The two-step design (frozen probe, then fine-tuning) measures this directly. H5 shows fine-tuning beats frozen features in 9 of 18 tests, so adaptation helps about half the time.</div></details>
+  <details class="qa"><summary>Is the text's drawdown signal just the company name?</summary><div>Largely, yes. Per-company, numbers-only and technical baselines trained on the same filings without text match it (H2c: 0/4). For the size of the reaction to a filing, the words do add +0.043 R² even after company one-hot controls (H11).</div></details>
+  <details class="qa"><summary>Did combining networks help?</summary><div>Vision combinations beat the best single network in 5 of 12 tasks, mostly volatility. Language combinations never did (0 of 12). Adding language to vision helped in 2 of 12, both drawdown. Picking combinations on validation over-fits, which is why the simple top-3 recipe is deployed.</div></details>
+  <details class="qa"><summary>How do you know the dashboard gives the same numbers as the study?</summary><div>The dashboard imports the notebook's shared core file unchanged, and §24 runs a parity test comparing dashboard outputs with notebook predictions on the same rows (<code>dashboard_parity.csv</code>).</div></details>
+  <details class="qa"><summary>Are the Monte Carlo ranges trustworthy?</summary><div>After a 1.25 volatility scale chosen on validation, the nominal 80% and 90% bands covered 82.6% and 90.8% of test outcomes. They are slightly conservative, which is the safe side.</div></details>
+  <details class="qa"><summary>What would you do differently?</summary><div>Draw charts on a fixed price scale, use several seeds, stabilise fine-tuning for the large encoders, add minute-stamped news, and test on a new forward period under the pre-registered v3.1 protocol.</div></details>
+  <details class="qa"><summary>Ethics?</summary><div>SEC data are public and accessed under fair-access rules. The licences include AGPL for YOLOv8 and the Llama 2 licence for FinGPT. There is no personal data. Look-ahead bias is treated as an integrity issue. The dashboard includes responsible-use statements, a no-call rule and no buy or sell advice.</div></details>
+</section>
+
+<footer>Built from the final Phase A3b run: result tables, figures and notebook sections §0–§26. Figures are the study's own outputs, and the diagrams were drawn for this guide.</footer>
+</main>
+</div>
+<script>
+document.getElementById('openAll').addEventListener('click',()=>document.querySelectorAll('details.qa').forEach(d=>d.open=true));
+document.getElementById('closeAll').addEventListener('click',()=>document.querySelectorAll('details.qa').forEach(d=>d.open=false));
+</script>

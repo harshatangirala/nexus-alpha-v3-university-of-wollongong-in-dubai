@@ -1,0 +1,357 @@
+# %% [markdown]
+## 23A. Addendum after the test: stronger baselines, incremental value and high-resolution tests (post-hoc)
+
+**Status.** Sections 4-23 are the confirmatory analysis: every selection was frozen in §22 and the test block was opened after that. This section was written **afterwards**, in response to a methodological review, and is labelled *post-hoc* in every table and report. It changes no earlier number.
+
+| Step | Question | What is computed | Data that decide the choice |
+|---|---|---|---|
+| A1 | Does the best CV / NLP / fusion model beat the strongest **numbers-only** baseline, not just the prior? | paired month-block bootstrap, Holm-corrected, same rows | baseline chosen per task on validation |
+| A3 | Is the filing-text signal only a company-identity signal? | three no-text baselines on the filing events: per-company base rates, momentum/HAR/trailing-volatility + form, LightGBM on 20 indicators + form | trained on the training block, tuned on 2021 |
+| H8 | Do charts and filing text add information to the technical-indicator model? | LightGBM on technical features alone (frozen in §22) vs the same learner with CV features, NLP features, or both | the first model was frozen before the test; the three extended models use the same learner and settings |
+| A4 | Can the many-test ablation families reach significance? | the same paired tests with 5,000 bootstrap draws instead of 1,000 (with 1,000 draws the smallest Holm-corrected p was about 2m/1001, i.e. about 0.07 for 36-44 tests) | none: only the precision of the p-values changes |
+| B8 | Are the Monte Carlo ranges too narrow? | one volatility scale factor, chosen on validation, applied to the dashboard simulation | validation coverage |
+
+**Rules kept.** New models use the training block for fitting and the inner block for tuning; no test label influences any choice; baselines are selected on validation only; the original tables are not overwritten; the reproducibility check at the end compares this execution with the archived first run.
+
+# %%
+POST_HOC_TABLES = []
+def _save_post_hoc(df, name, **kw):
+    df.to_csv(SUB["tables"] / name, **kw); POST_HOC_TABLES.append(name)
+
+def company_prior_raw(ctx, shrink=25.0):
+    """Per-company training-block base rates (class shares, mean log-volatility, drawdown rate), shrunk towards the overall prior."""
+    raw = {t: (np.zeros((ctx.n, 3)) if t.startswith("dir") else np.zeros(ctx.n)) for t in TASKS}
+    for t in TASKS:
+        kd = t.split("_")[0]; y = ctx.Y[t]; ok_tr = ctx.mask["train"] & np.isfinite(y); g = ctx.prior[t]
+        for tk in TICKERS:
+            ii = ctx.tickers == tk; ytr = y[ok_tr & ii]
+            if kd == "dir":
+                cnt = np.bincount(ytr.astype(int), minlength=3).astype(float)
+                p_ = (cnt + shrink * np.asarray(g, dtype=float)) / (cnt.sum() + shrink)
+                raw[t][ii] = np.log(np.clip(p_, 1e-6, 1.0))
+            elif kd == "vol":
+                raw[t][ii] = (float(ytr.sum()) + shrink * float(g)) / (len(ytr) + shrink)
+            else:
+                q_ = float(np.clip((float(ytr.sum()) + shrink * float(g)) / (len(ytr) + shrink), 1e-4, 1 - 1e-4))
+                raw[t][ii] = math.log(q_ / (1 - q_))
+    return raw
+
+# %% [markdown]
+### 23A.1 No-text baselines on the filing events and the extended technical models (trained on training + inner blocks only)
+
+# %%
+try:
+    FORM_OH = np.stack([(EV["form"].values == f_) for f_ in CFG["sec"]["forms"]], 1).astype(np.float32)
+    EV_TECH = np.full((len(EV), len(TECH_COLS)), np.nan, dtype=np.float32)
+    for t_ in TICKERS:
+        ii_ = np.flatnonzero((EV["ticker"] == t_).values)
+        if len(ii_):
+            EV_TECH[ii_] = TECH_FULL[t_].values[EV["pre_idx"].values[ii_].astype(int)]        # indicators at the last close before the filing was available
+    fi_ = {c: i for i, c in enumerate(TECH_COLS)}
+    raw_se = {}
+    for kd_, cols_ in SIMPLE_FEATS.items():
+        Xs_ = np.hstack([EV_TECH[:, [fi_[c] for c in cols_]], FORM_OH])
+        raw_se.update(fit_heads(EVENT, Xs_, EVENT.mask["train"], EVENT.mask["inner"], "linear", tasks=[f"{kd_}_{h}" for h in HORIZONS]))
+    finalize(EVENT, "simple_event", raw_se, "baseline_event", label="Numbers-only baseline on filing events (momentum / HAR / trailing volatility + form)")
+    finalize(EVENT, "company_event", company_prior_raw(EVENT), "baseline_event", label="Per-company base rates (training block, shrunk)")
+    st_te = Stage("phase_a_tech_event", [TECH_COLS, GBM, len(EV), CFG["blocks"]], [_pred_path("event", "tech_event")])
+    if not (st_te.done() and have_pred("event", "tech_event")):
+        finalize(EVENT, "tech_event", fit_heads(EVENT, np.hstack([EV_TECH, FORM_OH]), EVENT.mask["train"], EVENT.mask["inner"], "gbm"), "baseline_event",
+                 label="Technical LightGBM + form on filing events")
+        st_te.finish()
+    print("Event baselines ready:", [m for m in ("prior_event", "company_event", "simple_event", "tech_event") if REG.get(m, {}).get("status") == "RUN"])
+except Exception as e_:
+    failed("phase_a_event_baselines", e_)
+
+try:
+    if BEST_CV_FROZEN in CV_PCA and BEST_NLP_FROZEN in TEXT_PCA:
+        X_CV_ONLY = CV_PCA[BEST_CV_FROZEN]; X_NLP_ONLY = panel_text_features(BEST_NLP_FROZEN)
+        st_pa = Stage("phase_a_fusion_parts", [BEST_CV_FROZEN, BEST_NLP_FROZEN, N, GBM], [_pred_path("panel", "fusion_tech_cv"), _pred_path("panel", "fusion_tech_nlp")])
+        if not (st_pa.done() and have_pred("panel", "fusion_tech_cv") and have_pred("panel", "fusion_tech_nlp")):
+            finalize(PANEL, "fusion_tech_cv", fit_heads(PANEL, np.hstack([X_TECH, X_CV_ONLY]), TR, IN, "gbm"), "reference", label="Reference: technical + CV features (LightGBM)")
+            finalize(PANEL, "fusion_tech_nlp", fit_heads(PANEL, np.hstack([X_TECH, X_NLP_ONLY]), TR, IN, "gbm"), "reference", label="Reference: technical + NLP features (LightGBM)")
+            st_pa.finish()
+        print("Extended technical models ready:", [m for m in ("fusion_tech_cv", "fusion_tech_nlp", "fusion_tech") if REG.get(m, {}).get("status") == "RUN"])
+    else:
+        print("Extended technical models skipped: no frozen CV / NLP features available.")
+except Exception as e_:
+    failed("phase_a_fusion_parts", e_)
+
+# %% [markdown]
+### 23A.2 Locked-test comparisons against the strongest numbers-only baselines (A1, A3) and the incremental-value tests (H8)
+
+# %%
+H1C = H2C_EV = H2C_PANEL = H3C = H8 = H8B = H8C = None
+try:
+    def _vp(ctx, m, t):
+        pr = load_pred(ctx.name, m)[t]; r = ctx.rows(t, ctx.mask["val"], pr)
+        return primary_value(t, ctx.Y[t][r], pr[r]) if len(r) >= 30 else -np.inf
+    def _verdict(df):
+        if df is None or not len(df):
+            return df
+        df = df.copy()
+        better = (df["p_holm"] < CFG["alpha"]) & (df["delta"] > 0); worse = (df["p_holm"] < CFG["alpha"]) & (df["delta"] < 0)
+        df["verdict"] = np.where(better, "better", np.where(worse, "worse", "no clear difference"))
+        return df
+    NUM_BASES = [m for m in ("baseline_simple", "tech_gbm") if REG.get(m, {}).get("status") == "RUN"]
+    EV_BASES = [m for m in ("prior_event", "company_event", "simple_event", "tech_event") if REG.get(m, {}).get("status") == "RUN"]
+    BEST_NUM_BASE = {t: max(NUM_BASES, key=lambda m: _vp(PANEL, m, t)) for t in TASKS}          # chosen on validation only
+    BEST_EV_BASE = {t: max(EV_BASES, key=lambda m: _vp(EVENT, m, t)) for t in TASKS}
+    BASE_CHOICE = pd.DataFrame({"task": TASKS, "panel_baseline": [BEST_NUM_BASE[t] for t in TASKS], "event_baseline": [BEST_EV_BASE[t] for t in TASKS]})
+    _save_post_hoc(BASE_CHOICE, "phase_a_baseline_choice.csv", index=False)
+    H1C = _verdict(delta_rows(PANEL, {t: (BEST_CV_TASK[t], BEST_NUM_BASE[t]) for t in TASKS if t in BEST_CV_TASK}, TEM, "H1c best CV vs strongest numbers-only baseline"))
+    H2C_PANEL = _verdict(delta_rows(PANEL, {t: (BEST_NLPP_TASK[t], BEST_NUM_BASE[t]) for t in TASKS if t in BEST_NLPP_TASK}, TEM, "H2c best NLP (panel) vs strongest numbers-only baseline"))
+    H2C_EV = _verdict(delta_rows(EVENT, {t: (BEST_NLP_TASK[t], BEST_EV_BASE[t]) for t in TASKS if t in BEST_NLP_TASK}, TEE, "H2c best NLP (filing events) vs strongest no-text baseline"))
+    H3C = _verdict(delta_rows(PANEL, {t: (_bf[t], BEST_NUM_BASE[t]) for t in TASKS if t in _bf}, TEM, "H3c best fusion vs strongest numbers-only baseline"))
+    H8 = _verdict(delta_rows(PANEL, {t: ("fusion_tech", "tech_gbm") for t in TASKS}, TEM, "H8 technical + CV + NLP vs technical alone"))
+    H8B = _verdict(delta_rows(PANEL, {t: ("fusion_tech_cv", "tech_gbm") for t in TASKS}, TEM, "H8b technical + CV vs technical alone"))
+    H8C = _verdict(delta_rows(PANEL, {t: ("fusion_tech_nlp", "tech_gbm") for t in TASKS}, TEM, "H8c technical + NLP vs technical alone"))
+    for nm_, df_ in [("H1c", H1C), ("H2c_events", H2C_EV), ("H2c_panel", H2C_PANEL), ("H3c", H3C), ("H8", H8), ("H8b", H8B), ("H8c", H8C)]:
+        if df_ is not None and len(df_):
+            _save_post_hoc(df_, f"test_{nm_}.csv", index=False); print(nm_); display(df_[["task", "A", "B", "delta", "lo", "hi", "p_holm", "verdict"]].round(4))
+    def _fam_counts(df, name):
+        if df is None or not len(df):
+            return {"family": name, "tests": 0, "better": 0, "no clear difference": 0, "worse": 0}
+        vc = df["verdict"].value_counts()
+        return {"family": name, "tests": len(df), "better": int(vc.get("better", 0)), "no clear difference": int(vc.get("no clear difference", 0)), "worse": int(vc.get("worse", 0))}
+    HYP_A = pd.DataFrame([_fam_counts(H1C, "H1c best CV vs numbers-only baseline"), _fam_counts(H2C_PANEL, "H2c best NLP (panel) vs numbers-only baseline"),
+                          _fam_counts(H2C_EV, "H2c best NLP (events) vs no-text baseline"), _fam_counts(H3C, "H3c best fusion vs numbers-only baseline"),
+                          _fam_counts(H8, "H8 technical + CV + NLP vs technical"), _fam_counts(H8B, "H8b technical + CV vs technical"),
+                          _fam_counts(H8C, "H8c technical + NLP vs technical")])
+    _save_post_hoc(HYP_A, "hypotheses_phase_a.csv", index=False); display(HYP_A)
+    _pan = [m for m in ["prior", "baseline_simple", "tech_gbm", "fusion_tech_cv", "fusion_tech_nlp", "fusion_tech", "cv_top3", "nlp_panel_top3", "fusion_late_top3", "deploy_recipe"]
+            if REG.get(m, {}).get("status") == "RUN"]
+    _evt = [m for m in ["prior_event", "company_event", "simple_event", "tech_event"] + list(NLP_MAIN) if REG.get(m, {}).get("status") == "RUN"]
+    PIV_A_PANEL = leaderboard(PANEL, _pan, TEM, primary_only=True).pivot_table(index="model", columns="task", values="primary").reindex(columns=TASKS)
+    PIV_A_EVENT = leaderboard(EVENT, _evt, TEE, primary_only=True).pivot_table(index="model", columns="task", values="primary").reindex(columns=TASKS)
+    _save_post_hoc(PIV_A_PANEL.round(4), "phase_a_panel_test.csv"); _save_post_hoc(PIV_A_EVENT.round(4), "phase_a_event_test.csv")
+    print("Test primary metrics, panel rows:"); display(PIV_A_PANEL.round(3)); print("Test primary metrics, filing events:"); display(PIV_A_EVENT.round(3))
+except Exception as e_:
+    failed("phase_a_comparisons", e_)
+
+# %% [markdown]
+### 23A.2b Is the text gain only the filing calendar or the company? And a fair direction comparison (Phase A2, post-hoc)
+
+**Calendar control.** The panel text features contain, besides the text embeddings, four non-text columns: whether a periodic report / an 8-K exists and how many sessions ago it was filed. Volatility rises around earnings filings, so those columns alone could explain H8c. Two more LightGBM models with the same settings: technical + calendar columns (`fusion_tech_cal`), and technical + calendar + company one-hot (`fusion_tech_cal_co`). **H8d** = calendar vs technical alone; **H8e** = technical + text (with calendar) vs technical + calendar, i.e. the content of the text; **H8f** = the same against technical + calendar + company, i.e. text content beyond the calendar and the company's identity.
+
+**Fair direction comparison.** Macro-F1 punishes a model that predicts mostly one class, which the numbers-only baselines do. **H1d / H2d** compare *skills*: each model's macro-F1 minus its own within-month shuffled null (the H1 definition), so a model is not rewarded for spreading its predictions over the three classes.
+
+# %%
+H8D = H8E = H8F = H1D = H2D = None
+def _verdict2(df):
+    if df is None or not len(df):
+        return df
+    df = df.copy()
+    better = (df["p_holm"] < CFG["alpha"]) & (df["delta"] > 0); worse = (df["p_holm"] < CFG["alpha"]) & (df["delta"] < 0)
+    df["verdict"] = np.where(better, "better", np.where(worse, "worse", "no clear difference"))
+    return df
+try:
+    X_CAL = np.column_stack([HAS_PER, HAS_8K, np.log1p(np.nan_to_num(AGE["per"], nan=99)), np.log1p(np.nan_to_num(AGE["8k"], nan=99))]).astype(np.float32)
+    _tk = P["ticker"].astype(str).to_numpy(dtype=object)                      # plain NumPy array (pandas 3 returns an Arrow array from .values, which has no 2-D indexing)
+    X_CO = np.stack([(_tk == t_) for t_ in TICKERS], axis=1).astype(np.float32)
+    st_cal = Stage("phase_a2_calendar", [N, GBM, TICKERS, "cal_v1"], [_pred_path("panel", "fusion_tech_cal"), _pred_path("panel", "fusion_tech_cal_co")])
+    if not (st_cal.done() and have_pred("panel", "fusion_tech_cal") and have_pred("panel", "fusion_tech_cal_co")):
+        finalize(PANEL, "fusion_tech_cal", fit_heads(PANEL, np.hstack([X_TECH, X_CAL]), TR, IN, "gbm"), "reference", label="Reference: technical + filing-calendar columns (LightGBM)")
+        finalize(PANEL, "fusion_tech_cal_co", fit_heads(PANEL, np.hstack([X_TECH, X_CAL, X_CO]), TR, IN, "gbm"), "reference",
+                 label="Reference: technical + filing calendar + company one-hot (LightGBM)")
+        st_cal.finish()
+    H8D = _verdict2(delta_rows(PANEL, {t: ("fusion_tech_cal", "tech_gbm") for t in TASKS}, TEM, "H8d technical + filing calendar vs technical alone"))
+    H8E = _verdict2(delta_rows(PANEL, {t: ("fusion_tech_nlp", "fusion_tech_cal") for t in TASKS}, TEM, "H8e technical + text vs technical + filing calendar (text content)"))
+    H8F = _verdict2(delta_rows(PANEL, {t: ("fusion_tech_nlp", "fusion_tech_cal_co") for t in TASKS}, TEM, "H8f technical + text vs technical + calendar + company (text beyond identity)"))
+except Exception as e_:
+    failed("phase_a2_calendar", e_)
+
+def paired_skill_delta(ctx, task, pa, pb, mask, seed=0):
+    """Direction only: (macro-F1 of A minus A's own within-month shuffled null) minus the same for B; paired month-block bootstrap."""
+    pa, pb = np.asarray(pa), np.asarray(pb)
+    r = np.intersect1d(ctx.rows(task, mask, pa), ctx.rows(task, mask, pb))
+    if len(r) < 30:
+        return {"n": len(r), "skill_A": np.nan, "skill_B": np.nan, "delta": np.nan, "lo": np.nan, "hi": np.nan, "p": np.nan}
+    y = ctx.Y[task][r].astype(int); A, Bp = pa[r], pb[r]; mo = ctx.months[r]
+    nA, nB = dir_null_f1(y, A, mo, seed=seed), dir_null_f1(y, Bp, mo, seed=seed)
+    fn = lambda ix: (primary_value(task, y[ix], A[ix]) - nA) - (primary_value(task, y[ix], Bp[ix]) - nB)
+    bs = bootstrap(fn, month_groups(mo), seed=seed); est = fn(np.arange(len(r)))
+    p2 = 2 * min((1 + np.sum(bs <= 0)) / (1 + len(bs)), (1 + np.sum(bs >= 0)) / (1 + len(bs)))
+    return {"n": len(r), "skill_A": float(primary_value(task, y, A) - nA), "skill_B": float(primary_value(task, y, Bp) - nB), "delta": float(est),
+            "lo": float(np.nanpercentile(bs, 2.5)), "hi": float(np.nanpercentile(bs, 97.5)), "p": float(min(1.0, p2))}
+def skill_delta_rows(ctx, pairs_by_task, mask, family):
+    rows = [{"family": family, "task": t, "A": a, "B": b, **paired_skill_delta(ctx, t, load_pred(ctx.name, a)[t], load_pred(ctx.name, b)[t], mask)}
+            for t, (a, b) in pairs_by_task.items() if REG.get(a, {}).get("status") == "RUN" and REG.get(b, {}).get("status") == "RUN"]
+    df = pd.DataFrame(rows)
+    if len(df):
+        df["p_holm"] = holm(df["p"].values)
+    return _verdict2(df)
+try:
+    _dir = [f"dir_{h}" for h in HORIZONS]
+    H1D = skill_delta_rows(PANEL, {t: (BEST_CV_TASK[t], BEST_NUM_BASE[t]) for t in _dir if t in BEST_CV_TASK}, TEM, "H1d direction skill: best CV vs strongest numbers-only baseline")
+    H2D = skill_delta_rows(EVENT, {t: (BEST_NLP_TASK[t], BEST_EV_BASE[t]) for t in _dir if t in BEST_NLP_TASK}, TEE, "H2d direction skill: best NLP vs strongest no-text baseline (events)")
+except Exception as e_:
+    failed("phase_a2_direction_skill", e_)
+try:
+    for nm_, df_ in [("H8d", H8D), ("H8e", H8E), ("H8f", H8F), ("H1d", H1D), ("H2d_events", H2D)]:
+        if df_ is not None and len(df_):
+            _save_post_hoc(df_, f"test_{nm_}.csv", index=False); print(nm_); display(df_.drop(columns=["family"]).round(4))
+    _cnt = lambda df, name: ({"family": name, "tests": 0, "better": 0, "no clear difference": 0, "worse": 0} if df is None or not len(df) else
+                             {"family": name, "tests": len(df), **{k: int((df["verdict"] == k).sum()) for k in ("better", "no clear difference", "worse")}})
+    _new = pd.DataFrame([_cnt(H1D, "H1d direction skill: best CV vs numbers-only baseline (own shuffled nulls)"),
+                         _cnt(H2D, "H2d direction skill: best NLP vs no-text baseline (events, own shuffled nulls)"),
+                         _cnt(H8D, "H8d technical + filing calendar vs technical"), _cnt(H8E, "H8e technical + text vs technical + calendar"),
+                         _cnt(H8F, "H8f technical + text vs technical + calendar + company")])
+    _old = globals().get("HYP_A")
+    HYP_A = pd.concat([_old, _new], ignore_index=True) if _old is not None else _new
+    _save_post_hoc(HYP_A, "hypotheses_phase_a.csv", index=False); display(HYP_A)
+except Exception as e_:
+    failed("phase_a2_save", e_)
+
+# %% [markdown]
+### 23A.2c Secondary metrics on the locked test (Phase A2d, post-hoc)
+
+The primary metric per target (macro-F1, R-squared, ROC-AUC) is complemented by the metrics a reader asks for first: **accuracy** and **balanced accuracy** (plain accuracy rewards always predicting the most common class), **log loss** and per-class F1 for direction; **QLIKE** (Patton 2011), Spearman and MAE for volatility; **PR-AUC**, **Brier skill** (against a constant forecast at the training-block base rate) and **calibration error (ECE)** for drawdown. Rows: the uninformed prior, the strongest numbers-only / no-text baseline chosen on validation, the label-shuffle control (CV) or per-company base rates and TF-IDF (NLP), the validation-chosen model per task and the top-3 CV ensemble. Nothing is selected or refitted here.
+
+# %%
+SEC_COLS = {"dir": ["role", "model", "task", "macro_f1", "accuracy", "balanced_acc", "log_loss", "f1_down", "f1_side", "f1_up"],
+            "vol": ["role", "model", "task", "r2", "qlike", "spearman", "mae"],
+            "dd": ["role", "model", "task", "auc", "pr_auc", "bss", "ece", "base_rate"]}
+def _secondary(ctx, mask, roles_by_task):
+    lbs, rows = {}, []
+    for t, roles in roles_by_task.items():
+        for role, m in roles:
+            if not m or REG.get(m, {}).get("status") != "RUN":
+                continue
+            if m not in lbs:
+                lbs[m] = leaderboard(ctx, [m], mask)
+            lb_ = lbs[m]
+            r = lb_[lb_["task"] == t] if "task" in lb_.columns else lb_.iloc[0:0]
+            if len(r):
+                rows.append({"role": role, **r.iloc[0].to_dict()})
+    df = pd.DataFrame(rows)
+    return df.drop_duplicates(["model", "task"], keep="first") if len(df) else df
+try:
+    _bn, _be = globals().get("BEST_NUM_BASE", {}), globals().get("BEST_EV_BASE", {})
+    _cv_roles = {t: [("uninformed prior", "prior"), ("numbers-only baseline", _bn.get(t)), ("label-shuffle control", "resnet50_frozen_shuffled"),
+                     ("best CV model (validation)", BEST_CV_TASK.get(t)), ("top-3 CV ensemble", "cv_top3")] for t in TASKS}
+    _ev_roles = {t: [("uninformed prior", "prior_event"), ("no-text baseline", _be.get(t)), ("company base rates", "company_event"),
+                     ("best NLP model (validation)", BEST_NLP_TASK.get(t)), ("TF-IDF baseline", "tfidf_lr")] for t in TASKS}
+    SEC_CV, SEC_NLP = _secondary(PANEL, TEM, _cv_roles), _secondary(EVENT, TEE, _ev_roles)
+    for nm_, df_ in (("cv", SEC_CV), ("nlp", SEC_NLP)):
+        for kd_, cols_ in SEC_COLS.items():
+            sub_ = df_[df_["target"] == kd_][[c for c in cols_ if c in df_.columns]] if len(df_) and "target" in df_.columns else pd.DataFrame(columns=cols_)
+            _save_post_hoc(sub_.round(4), f"secondary_{nm_}_{kd_}_test.csv", index=False)
+    print("Secondary metrics saved:", len(SEC_CV), "CV rows,", len(SEC_NLP), "NLP rows")
+    display(SEC_CV[SEC_CV["target"] == "dir"][[c for c in SEC_COLS["dir"] if c in SEC_CV.columns]].round(3))
+except Exception as e_:
+    failed("phase_a2d_secondary", e_)
+
+# %% [markdown]
+### 23A.3 High-resolution versions of the many-test families (5,000 bootstrap draws)
+
+# %%
+CV_ABL_HI = NLP_ABL_HI = H5_HI = None
+BOOT["B"] = 5000 if not QUICK else CFG["bootstrap_B"]
+try:
+    t0_ = time.time(); rows_ = []
+    for a_, b_, what_ in ABL_PAIRS:
+        if REG.get(a_, {}).get("status") != "RUN" or REG.get(b_, {}).get("status") != "RUN":
+            continue
+        pa_, pb_ = load_pred("panel", a_), load_pred("panel", b_)
+        for kd_ in ("dir", "vol", "dd"):
+            rows_.append({"comparison": what_, "A": a_, "B": b_, "target": kd_, **paired_delta_family(PANEL, kd_, pa_, pb_, PANEL.mask["val"])})
+    CV_ABL_HI = pd.DataFrame(rows_)
+    if len(CV_ABL_HI):
+        CV_ABL_HI["p_holm"] = holm(CV_ABL_HI["p"].values); CV_ABL_HI["B"] = BOOT["B"]; _save_post_hoc(CV_ABL_HI, "cv_ablations_val_hiB.csv", index=False)
+    print(f"CV ablations ({len(CV_ABL_HI)} tests, B={BOOT['B']}): {(time.time() - t0_) / 60:.1f} min")
+except Exception as e_:
+    failed("phase_a_cv_ablations", e_)
+try:
+    t0_ = time.time(); rows_ = []
+    pairs_ = ([(f"{e}_ft", f"{e}_frozen", "fine-tuned vs frozen") for e in ENCODERS] + [(f"{e}_frozen", f"{e}_frozen_1chunk", "4 chunks vs first 512 tokens") for e in ENCODERS] +
+              [("finbert_ft", "roberta_l_ft", "FinBERT (finance, base) vs RoBERTa-large (general, large)"), ("secbert_ft", "finbert_ft", "SEC-BERT vs FinBERT (domain)"),
+               ("longformer_ft", "finbert_ft", "Longformer 4096 vs FinBERT 512 (length)"), ((NLP_BEST or "tfidf_lr"), "tfidf_lr", "best NLP vs TF-IDF baseline")])
+    for a_, b_, what_ in pairs_:
+        if a_ == b_ or REG.get(a_, {}).get("status") != "RUN" or REG.get(b_, {}).get("status") != "RUN":
+            continue
+        pa_, pb_ = load_pred("event", a_), load_pred("event", b_)
+        for kd_ in ("dir", "vol", "dd"):
+            rows_.append({"comparison": what_, "A": a_, "B": b_, "target": kd_, **paired_delta_family(EVENT, kd_, pa_, pb_, EVENT.mask["val"])})
+    NLP_ABL_HI = pd.DataFrame(rows_)
+    if len(NLP_ABL_HI):
+        NLP_ABL_HI["p_holm"] = holm(NLP_ABL_HI["p"].values); NLP_ABL_HI["B"] = BOOT["B"]; _save_post_hoc(NLP_ABL_HI, "nlp_ablations_val_hiB.csv", index=False)
+    print(f"NLP ablations ({len(NLP_ABL_HI)} tests, B={BOOT['B']}): {(time.time() - t0_) / 60:.1f} min")
+except Exception as e_:
+    failed("phase_a_nlp_ablations", e_)
+try:
+    t0_ = time.time(); rows_ = []
+    for n_ in FROZEN_CV:
+        a_, b_ = f"{n_}_ft", f"{n_}_frozen"
+        if REG.get(a_, {}).get("status") == "RUN" and REG.get(b_, {}).get("status") == "RUN":
+            for kd_ in ("dir", "vol", "dd"):
+                rows_.append({"family": "H5 fine-tuned vs frozen", "model": n_, "target": kd_, **paired_delta_family(PANEL, kd_, load_pred("panel", a_), load_pred("panel", b_), TEM)})
+    H5_HI = pd.DataFrame(rows_)
+    if len(H5_HI):
+        H5_HI["p_holm"] = holm(H5_HI["p"].values); H5_HI["supported"] = (H5_HI["p_holm"] < CFG["alpha"]) & (H5_HI["delta"] > 0); H5_HI["B"] = BOOT["B"]
+        _save_post_hoc(H5_HI, "test_H5_hiB.csv", index=False)
+    print(f"H5 on the test block ({len(H5_HI)} tests, B={BOOT['B']}): {(time.time() - t0_) / 60:.1f} min")
+except Exception as e_:
+    failed("phase_a_h5", e_)
+finally:
+    BOOT["B"] = None
+
+# %% [markdown]
+### 23A.4 Monte Carlo ranges: one volatility scale factor, chosen on validation
+
+# %%
+MC_SCALE_VAL = MC_TEST_SCALED = None
+try:
+    if REG.get("deploy_recipe", {}).get("status") == "RUN":
+        grid_ = [1.0, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.4]; rows_ = []
+        for k_ in grid_:
+            d_ = mc_eval("deploy_recipe", VM, MC_CFG["nu"], CFG["mc"]["eval_rows"], seed=0, scale=k_)
+            rows_.append({"scale": k_, "coverage80": float(d_.in80.mean()), "coverage90": float(d_.in90.mean()),
+                          "brier_dd_mc": float(np.mean((d_.p_dd_mc - d_.dd) ** 2)), "n": len(d_)})
+        MC_SCALE_VAL = pd.DataFrame(rows_); MC_SCALE_VAL["score"] = (MC_SCALE_VAL.coverage80 - 0.8).abs() + (MC_SCALE_VAL.coverage90 - 0.9).abs()
+        k_best = float(MC_SCALE_VAL.scale.values[int(MC_SCALE_VAL.score.values.argmin())])
+        MC_CFG["scale"] = k_best; (SUB["results"] / "mc_config.json").write_text(json.dumps(MC_CFG))
+        d_ = mc_eval("deploy_recipe", TEM, MC_CFG["nu"], CFG["mc"]["eval_rows"], seed=1, scale=k_best)
+        MC_TEST_SCALED = pd.DataFrame([{"scale": k_best, "nu": MC_CFG["nu"] or "normal", "coverage80": float(d_.in80.mean()), "coverage90": float(d_.in90.mean()),
+                                        "brier_dd_mc": float(np.mean((d_.p_dd_mc - d_.dd) ** 2)), "brier_dd_head": float(np.mean((d_.p_dd_head - d_.dd) ** 2)), "n": len(d_)}])
+        _save_post_hoc(MC_SCALE_VAL, "mc_scale_val.csv", index=False); _save_post_hoc(MC_TEST_SCALED, "mc_calibration_test_scaled.csv", index=False)
+        print(f"Chosen volatility scale on validation: {k_best}"); display(MC_SCALE_VAL.round(3)); display(MC_TEST_SCALED.round(3))
+except Exception as e_:
+    failed("phase_a_mc_scale", e_)
+
+# %% [markdown]
+### 23A.5 Reproducibility check against the archived first run, and the post-hoc ledger
+
+Before this addendum was run, the artifacts folder of the first (confirmatory) run was copied to `artifacts_full_research_v3.0_original`. The check below recomputes nothing: it compares the confirmatory tables written by this execution with the archived ones. Differences should be zero (up to floating-point noise).
+
+# %%
+REPRO = pd.DataFrame()
+try:
+    ARCH = DRIVE_ROOT / "artifacts_full_research_v3.0_original" / "tables"
+    rows_ = []
+    if ARCH.exists():
+        for f_, col_, keys_ in [("test_H1.csv", "skill", ["task"]), ("test_H2.csv", "skill", ["task"]), ("test_H2b.csv", "skill", ["task"]), ("test_H3.csv", "delta", ["task"]),
+                                ("test_H4.csv", "delta", ["task"]), ("test_deploy.csv", "skill", ["task"]), ("test_H5.csv", "delta", ["model", "target"]),
+                                ("cv_leaderboard_test.csv", "primary", ["model", "task"]), ("fusion_leaderboard_test.csv", "primary", ["model", "task"]),
+                                ("nlp_leaderboard_test.csv", "primary", ["model", "task"]), ("nlp_panel_leaderboard_test.csv", "primary", ["model", "task"])]:
+            pa_, pb_ = ARCH / f_, SUB["tables"] / f_
+            if not (pa_.exists() and pb_.exists()):
+                rows_.append({"table": f_, "rows_compared": 0, "max_abs_difference": np.nan, "status": "missing"}); continue
+            a_df, b_df = pd.read_csv(pa_), pd.read_csv(pb_)
+            m_ = a_df.dropna(subset=[col_]).merge(b_df.dropna(subset=[col_]), on=keys_, suffixes=("_old", "_new"))
+            dmax = float(np.max(np.abs(m_[f"{col_}_old"] - m_[f"{col_}_new"]))) if len(m_) else np.nan
+            status_ = ("identical" if dmax < 1e-9 else "identical up to float rounding (< 1e-6)" if dmax < 1e-6 else "DIFFERENT") if np.isfinite(dmax) else "DIFFERENT"
+            rows_.append({"table": f_, "rows_compared": len(m_), "max_abs_difference": f"{dmax:.1e}" if np.isfinite(dmax) else "-", "status": status_})
+    else:
+        rows_.append({"table": "(archive folder not found)", "rows_compared": 0, "max_abs_difference": np.nan, "status": "not checked"})
+    REPRO = pd.DataFrame(rows_); _save_post_hoc(REPRO, "phase_a_repro_check.csv", index=False); display(REPRO)
+except Exception as e_:
+    failed("phase_a_repro_check", e_)
+
+_log = json.loads(VAULT_LOG.read_text()) if VAULT_LOG.exists() else []
+PHASE_A = {"utc": now_utc(), "post_hoc_tables": POST_HOC_TABLES, "post_freeze_models": sorted(POST_FREEZE_IDS), "bootstrap_B_high": 5000 if not QUICK else CFG["bootstrap_B"],
+           "mc_scale": MC_CFG.get("scale", 1.0), "vault_openings": len(_log), "executions_that_opened_the_vault": int(sum(1 for r_ in _log if r_.get("item") == "panel_labels")),
+           "repro_status": REPRO["status"].value_counts().to_dict() if len(REPRO) else {}}
+(SUB["results"] / "phase_a_results.json").write_text(json.dumps(PHASE_A, indent=1, default=str))
+print("Post-hoc ledger:", json.dumps(PHASE_A, default=str)[:600])
+tick("23A phase a")

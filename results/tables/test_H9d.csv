@@ -1,0 +1,13 @@
+family,task,A,B,n,delta,lo,hi,p,p_holm,supported,verdict
+H9d CV + NLP combination vs strongest numbers-only baseline,dir_5,fusion_combo_best,baseline_simple,6550,0.11308752545913861,0.09645469573094977,0.12793494827850077,0.001998001998001998,0.023976023976023976,True,better
+H9d CV + NLP combination vs strongest numbers-only baseline,dir_10,fusion_combo_best,tech_gbm,6550,0.14428015858104495,0.12172806002351423,0.16579185541132901,0.001998001998001998,0.023976023976023976,True,better
+H9d CV + NLP combination vs strongest numbers-only baseline,dir_20,fusion_combo_best,baseline_simple,6550,0.08083370357085184,0.057377071886720636,0.10212088754508279,0.001998001998001998,0.023976023976023976,True,better
+H9d CV + NLP combination vs strongest numbers-only baseline,dir_40,fusion_combo_best,tech_gbm,6550,0.06805196270271835,0.047142320792571114,0.08902503368807688,0.001998001998001998,0.023976023976023976,True,better
+H9d CV + NLP combination vs strongest numbers-only baseline,vol_5,fusion_combo_best,tech_gbm,6550,-0.25351008187033974,-0.3042723066622391,-0.201422531506288,0.001998001998001998,0.023976023976023976,False,worse
+H9d CV + NLP combination vs strongest numbers-only baseline,vol_10,fusion_combo_best,tech_gbm,6550,-0.25752236919943583,-0.32140475246245637,-0.19345916428447665,0.001998001998001998,0.023976023976023976,False,worse
+H9d CV + NLP combination vs strongest numbers-only baseline,vol_20,fusion_combo_best,tech_gbm,6550,-0.3143637795300551,-0.4038580075995652,-0.22846967974905552,0.001998001998001998,0.023976023976023976,False,worse
+H9d CV + NLP combination vs strongest numbers-only baseline,vol_40,fusion_combo_best,tech_gbm,6550,-0.4214775274205984,-0.5408426120496579,-0.30671080619210217,0.001998001998001998,0.023976023976023976,False,worse
+H9d CV + NLP combination vs strongest numbers-only baseline,dd_5,fusion_combo_best,baseline_simple,6550,-0.056350356398249146,-0.09663799690447698,-0.012429191775683851,0.017982017982017984,0.05394605394605395,False,no clear difference
+H9d CV + NLP combination vs strongest numbers-only baseline,dd_10,fusion_combo_best,baseline_simple,6550,-0.0548823890698914,-0.0977365737246569,-0.014161490160611558,0.007992007992007992,0.03196803196803197,False,worse
+H9d CV + NLP combination vs strongest numbers-only baseline,dd_20,fusion_combo_best,baseline_simple,6550,-0.04282450955177697,-0.07848574175067617,-0.00846075631771458,0.01998001998001998,0.05394605394605395,False,no clear difference
+H9d CV + NLP combination vs strongest numbers-only baseline,dd_40,fusion_combo_best,tech_gbm,6550,-0.02268961741121478,-0.06239630082765813,0.01852935065290105,0.26173826173826176,0.26173826173826176,False,no clear difference

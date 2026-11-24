@@ -1,0 +1,84 @@
+# %% [markdown]
+# NEXUS Alpha v3: Can chart images, SEC filing text, or both predict where a stock goes next?
+
+**A leakage-controlled comparison of 7 computer-vision models and 6 language models (plus baselines) on 50 US stocks in 5 sectors, 2016-10 to 2026-10, at 5, 10, 20 and 40 trading-day horizons.**
+
+Master of Applied Artificial Intelligence, University of Wollongong in Dubai. Final project (Computer Vision + Natural Language Processing).
+
+> Educational research. Not financial advice. A predictive association is not a cause.
+
+**This notebook is the only entry point.** It downloads nothing it cannot verify, trains every model, picks winners on validation data only, freezes those choices, scores the locked test period once, writes a Streamlit dashboard and generates three PDF reports (Computer Vision, NLP, and Multimodal). Every number in the reports is read from files this run saved; no number is typed in by hand.
+
+| Item | Setting |
+|---|---|
+| Stocks | 50 (10 per sector: Information Technology, Financials, Health Care, Consumer Discretionary, Communication Services) |
+| Prices | Verified 1-week, 1-day and 1-hour bars (TriFrame tier-A store, every file SHA-256 checked), plus SPY |
+| Text | SEC EDGAR 10-K, 10-Q and 8-K filings of the same 50 companies, downloaded in this notebook with point-in-time acceptance timestamps |
+| Decisions | 2016-10-10 to 2026-08 (10 years of decision dates; older bars are used only to draw the first charts) |
+| Targets | (a) direction: DOWN / SIDEWAYS / UP, (b) realised volatility, (c) a drawdown of more than 10% — each over 5, 10, 20 and 40 sessions |
+| Blocks | train 2016-10 → 2020-12 · inner 2021 (early stopping, calibration) · validation 2022-2023 (all model selection) · **test 2024-01 → 2026-08 (locked, opened once after the freeze)** |
+| CV models | Custom CNN (Jiang-Kelly-Xiu style, from scratch), ResNet-50, EfficientNet-B0, ConvNeXt-Tiny, ViT-B/16, Swin-T, YOLOv8 (classification backbone; plus the ready-made YOLOv8 chart-pattern detector as a zero-shot extra) |
+| NLP models | TF-IDF + logistic/ridge (baseline), FinBERT, SEC-BERT, RoBERTa-large, Longformer-4096, DeBERTa-v3-large, FinGPT (Llama-2-7B + FinGPT LoRA) |
+
+# %% [markdown]
+## 0. Feasibility check of the original plan (read before running)
+
+**Verdict: the project can be done, with six changes.** Each change is forced by data or by how a model works, not by results (no result existed when they were made).
+
+| # | Original plan | What this notebook does | Why |
+|---|---|---|---|
+| 1 | 50 named stocks | **44 kept, 6 replaced within the same sector**: AVGO→TXN, CRM→ADBE (IT); BKNG→MAR (Consumer Discretionary); CMCSA→META, TMUS→OMC, EA→NYT (Communication Services). GOOGL is represented by **GOOG** (same company, Alphabet class C; prices nearly identical) | The six have no verified 10-year **hourly** bars in our store (Yahoo gives only 730 days of hourly data). Replacing them keeps 10 stocks per sector. 16 same-sector reserves are in the data package; section 3 swaps one in automatically, by a rule fixed in advance, if a stock fails the SEC check |
+| 2 | "Candlestick movement" | Interpreted as the **3-class direction** of the price (DOWN / SIDEWAYS / UP) over each horizon, with a volatility-scaled sideways band | A class must be defined before it can be predicted; a fixed band (e.g. ±1%) would make "sideways" mean different things for a utility-like and a volatile stock |
+| 3 | YOLOv8 "detects candlestick patterns; ready-made weights" | Two uses: **(a)** YOLOv8s-cls ImageNet backbone fine-tuned on our task exactly like the other six (this is the model in every comparison); **(b)** the public detector `foduucom/stockmarket-pattern-detection-yolov8` (6 chart patterns, published mAP@0.5 ≈ 0.61) used zero-shot as pattern features | A detector outputs boxes, not up/down/volatility. Using its detections as features is the honest way to test "ready-made chart-pattern weights" |
+| 4 | "RoBERTa-large (Financial)" | `FacebookAI/roberta-large` (general), fine-tuned on our filings | No established financial RoBERTa-large checkpoint exists; fine-tuning on SEC text is what makes it financial |
+| 5 | FinGPT "LoRA fine-tuned" | FinGPT's published LoRA (`FinGPT/fingpt-mt_llama2-7b_lora`) on Llama-2-7B, loaded in 4-bit, used as a **frozen** encoder (embeddings + its native sentiment read-out). Optional QLoRA switch (off) | 7B parameters: a full fine-tune for 12 targets does not fit the budget. Llama-2 is gated (Meta licence accepted on the `HF_TOKEN` account). If loading fails, FinGPT is reported as Not Run and the study has 5 language models |
+| 6 | 10 years, 1W/1D/1H charts | Decision dates 2016-10-10 → 2026-08 (labels need 40 sessions after the last decision; data end 2026-10-09). Charts: 52 weekly, 63 daily, 70 hourly candles | Exactly the requested span. The **test period (2024-2026) begins after the pre-training cut-off of every language model used** (Llama-2's data end 2022; DeBERTa-v3 2021; others earlier), so no text model can "remember" test-period news |
+
+**What will probably happen (stated before any result, so the reports cannot be accused of hindsight).** Earlier projects on the same data (TriFrame, NEXUS V1, the SEC filings study) found: volatility is predictable (persistence), drawdown risk is partly predictable, **direction is close to chance**, and chart images or filing text add little once simple numbers are known. This study is designed so that a null result is still a clear, defensible finding.
+
+**Run it in this order.** (1) Upload `nav3_bars_66.zip` to `MyDrive/antigravity_workspace/nexus_alpha_v3/data/`. (2) Colab Secrets: `HF_TOKEN` and `SEC_USER_AGENT` ("Your Name your.email@domain"), *Notebook access* ON. (3) Accept the Llama-2 licence (only needed for FinGPT). (4) Runtime → A100 GPU, High-RAM. (5) Run all with `RUN_MODE = "QUICK_VERIFY"` (about 1-1.5 h, 10 stocks, short training: a pipeline check, stamped "not research results"). (6) Switch to `"FULL_RESEARCH"` and Run all (about 8-10 h the first time; the SEC download is cached). Every stage saves to Drive and resumes after a disconnect.
+
+# %% [markdown]
+## 0.1 Where each project question is answered
+
+| Question (from the project brief) | Development answer (validation) | Final answer (locked test) |
+|---|---|---|
+| Q1. Can CV, NLP, or CV+NLP predict UP/SIDEWAYS/DOWN at 5/10/20/40 days? | §20 | §23.1 |
+| Q2. Which CV model is best over the 50 stocks, and why? | §12.1 | §23.2 |
+| Q3. Which CV model combination is best (e.g. CNN+ResNet, EfficientNet+ResNet…)? | §12.2 | §23.3 |
+| Q4. Which model or combination best predicts (a) direction, (b) volatility, (c) a >10% drawdown? | §12.1-12.2 | §23.3 |
+| Q5. Which model works best in which sector; is any network sector-specific? | §12.3 | §23.4 |
+| Q6. Which report moves the market more: 10-K, 10-Q or 8-K? | §14 (event study), §18 | §23.5 |
+| Q7. In which sectors do filings move prices more? | §14, §18 | §23.5 |
+| Q8. What in the reports moves the market? | §15 (words), §18.3 (8-K items, tone, attributions) | §23.5 |
+| Q9. Which sectors are sensitive to which report type? | §14 (sector × form) | §23.5 |
+| Q10. Does combining the top-3 CV and top-3 NLP models add predictive edge? | §20 | §23.1 |
+| Stronger baselines, do CV/NLP add to simple numbers? (post-hoc, after the test was opened) | | §23A |
+| Combinations of networks (within and across modalities), interpretable text features, hypothesis register, v3.1 protocol (post-hoc) | | §23B |
+| Product: Streamlit dashboard (4 stocks × 1W/1D/1H screenshots + filing summary → UP/SIDEWAYS/DOWN + 20-day Monte Carlo) | §21 (simulator check) | §24 |
+| Three reports: CV, NLP, Multimodal | | §25 |
+
+# %% [markdown]
+## 0.2 Evaluation-checklist mapping (professor's CV and NLP checklists)
+
+| Checklist item | Where |
+|---|---|
+| Problem statement, real-world relevance, research gap, literature | §1 |
+| Dataset selection and analysis (counts, classes, resolution, imbalance, sectors) | §3, §4.2 (labels), §6.3 (images), §13.2 (text) |
+| Preprocessing (resizing, normalisation, cleaning, tokenisation, section extraction) | §6, §13 |
+| Data augmentation (and why horizontal flips are forbidden for charts) | §10.1 |
+| Data splitting and leakage prevention (blocks, purge, locked test, causality tests, pre-training cut-offs) | §4.1, §4.3, §6.2, §22 |
+| Baselines (prior, momentum, HAR volatility, trailing-volatility drawdown, TF-IDF, technical LightGBM reference, random-weight CNN, label shuffle) | §8, §15 |
+| Model selection, architecture understanding, transfer learning | §1.3, §9, §10, §16-17 |
+| Training strategy (loss, optimiser, schedule, batch, epochs, early stopping) | §10.1, §17.1 |
+| Hyperparameter tuning (learning-rate probe per model, regularisation grid) | §10.2, §17.2 |
+| Over-/under-fitting (training and early-stopping curves) | §10.4, §17.4 |
+| Metrics matched to each task (macro-F1, log loss, R², QLIKE, ROC-AUC, PR-AUC, Brier, ECE) | §7 |
+| Fair model comparison (same rows, same labels, paired month-block bootstrap, Holm) | §7, §12, §18, §20, §23 |
+| Ablations (views, frozen vs fine-tuned, pretrained vs random, augmentation, text length/form) | §9.3, §12.4, §18 |
+| Error analysis | §12.5, §18.4, §23.6 |
+| Explainable AI (Grad-CAM / token maps, occlusion by time and view, integrated gradients for text) with limits | §12.6, §18.3 |
+| Robustness (noise, blur, JPEG, chart style, screenshot resizing, missing view) | §12.7 |
+| Computational efficiency (parameters, FLOPs, latency, training minutes) | §12.8, §18.5 |
+| Research contribution, limitations, viva preparation | §1.2, §26 |
+| Reproducibility (seeds, config hashes, data hashes, package versions, freeze manifest) | §2, §22 |

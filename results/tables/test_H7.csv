@@ -1,0 +1,3 @@
+family,test,p,p_dev,supported
+H7 event study,"filing days move more than non-filing days (Mann-Whitney, one-sided)",8.886424659117898e-88,3.562878864624851e-220,True
+H7 event study,reaction size differs by form (Kruskal-Wallis),0.005870073639697998,0.002885443865315702,True

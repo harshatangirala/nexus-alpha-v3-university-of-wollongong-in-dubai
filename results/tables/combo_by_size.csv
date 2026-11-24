@@ -1,0 +1,109 @@
+modality,size,task,target,best_combo,val_primary,test_primary
+CV,1,dd_10,dd,resnet50_ft,0.526488106904398,0.585913752714646
+CV,1,dd_20,dd,effnet_b0_ft,0.5371596998592437,0.49994881546160946
+CV,1,dd_40,dd,vit_b16_ft,0.506034829268157,0.5404174806079098
+CV,1,dd_5,dd,swin_t_ft,0.5740532310841261,0.604550081322112
+CV,1,dir_10,dir,convnext_t_ft,0.34942049396659036,0.3705893132946833
+CV,1,dir_20,dir,convnext_t_ft,0.3393050491289542,0.37623228388121355
+CV,1,dir_40,dir,effnet_b0_ft,0.33340128344101233,0.32995048627694773
+CV,1,dir_5,dir,convnext_t_ft,0.33887783440566666,0.3560980383375802
+CV,1,vol_10,vol,vit_b16_ft,-0.028617159272971593,0.03248960613733354
+CV,1,vol_20,vol,vit_b16_ft,-0.0786575806228238,-0.028760963155126218
+CV,1,vol_40,vol,yolov8_cls_ft,-0.1623912517182282,-0.1823362609409933
+CV,1,vol_5,vol,swin_t_ft,0.014165899123673387,0.08362644321182144
+CV,2,dd_10,dd,resnet50_ft + effnet_b0_ft,0.5332986610817743,0.5767807154306404
+CV,2,dd_20,dd,effnet_b0_ft + swin_t_ft,0.5362765797486436,0.49509969179656044
+CV,2,dd_40,dd,effnet_b0_ft + vit_b16_ft,0.5101225901066789,0.5183469043820937
+CV,2,dd_5,dd,effnet_b0_ft + swin_t_ft,0.5663048017659558,0.6046418415910753
+CV,2,dir_10,dir,resnet50_ft + vit_b16_ft,0.3441830120560891,0.35805579357381817
+CV,2,dir_20,dir,convnext_t_ft + vit_b16_ft,0.34428999314776765,0.36771708095367983
+CV,2,dir_40,dir,effnet_b0_ft + vit_b16_ft,0.3319998148074755,0.36762706440992093
+CV,2,dir_5,dir,convnext_t_ft + vit_b16_ft,0.33859059107516853,0.34898953052768283
+CV,2,vol_10,vol,effnet_b0_ft + vit_b16_ft,0.028493698319682847,0.04254890279409407
+CV,2,vol_20,vol,effnet_b0_ft + vit_b16_ft,0.0008174220995894599,-0.005479108580883185
+CV,2,vol_40,vol,vit_b16_ft + yolov8_cls_ft,-0.11129927713010668,-0.13618536726408204
+CV,2,vol_5,vol,vit_b16_ft + swin_t_ft,0.06974714372371871,0.11294263503492497
+CV,3,dd_10,dd,resnet50_ft + effnet_b0_ft + swin_t_ft,0.5338500105463376,0.5792520170746184
+CV,3,dd_20,dd,effnet_b0_ft + vit_b16_ft + swin_t_ft,0.5364466515050894,0.5368223424304644
+CV,3,dd_40,dd,effnet_b0_ft + vit_b16_ft + swin_t_ft,0.5100401335121284,0.518483478333107
+CV,3,dd_5,dd,resnet50_ft + effnet_b0_ft + swin_t_ft,0.5550105782954489,0.633030217441137
+CV,3,dir_10,dir,resnet50_ft + convnext_t_ft + swin_t_ft,0.33982089843041613,0.34575526027360604
+CV,3,dir_20,dir,resnet50_ft + convnext_t_ft + swin_t_ft,0.3513178780198094,0.3731203262132312
+CV,3,dir_40,dir,resnet50_ft + effnet_b0_ft + vit_b16_ft,0.3391527039657882,0.36653448577857956
+CV,3,dir_5,dir,resnet50_ft + effnet_b0_ft + convnext_t_ft,0.33017965261190096,0.33033927197247376
+CV,3,vol_10,vol,effnet_b0_ft + vit_b16_ft + swin_t_ft,0.05845732029797879,0.07128922625012846
+CV,3,vol_20,vol,effnet_b0_ft + vit_b16_ft + yolov8_cls_ft,0.02423477889924286,0.0003009486122579341
+CV,3,vol_40,vol,effnet_b0_ft + vit_b16_ft + yolov8_cls_ft,-0.09748263902914034,-0.13332525213748725
+CV,3,vol_5,vol,effnet_b0_ft + vit_b16_ft + swin_t_ft,0.09474333577127936,0.11746056478728928
+NLP (filing events),1,dd_10,dd,longformer_ft,0.696127712826715,0.6123484878201859
+NLP (filing events),1,dd_20,dd,longformer_ft,0.6447257344824068,0.6392702549575071
+NLP (filing events),1,dd_40,dd,longformer_ft,0.6369202111693769,0.6278559699741966
+NLP (filing events),1,dd_5,dd,longformer_ft,0.751914226965632,0.6514393218894381
+NLP (filing events),1,dir_10,dir,secbert_ft,0.23403342004183927,0.24240750242218234
+NLP (filing events),1,dir_20,dir,secbert_ft,0.3226436159285792,0.35009911758827067
+NLP (filing events),1,dir_40,dir,fingpt_frozen,0.2714704297470652,0.2812574240063332
+NLP (filing events),1,dir_5,dir,deberta_l_ft,0.24509914788034406,0.23413834598946015
+NLP (filing events),1,vol_10,vol,finbert_ft,-0.08715510479025279,-0.039943704388759604
+NLP (filing events),1,vol_20,vol,finbert_ft,-0.0642192181508019,-0.020950544725381937
+NLP (filing events),1,vol_40,vol,finbert_ft,-0.059193915497547156,-0.02188804305052683
+NLP (filing events),1,vol_5,vol,finbert_ft,-0.07597515650371323,-0.02307295117674779
+NLP (filing events),2,dd_10,dd,longformer_ft + fingpt_frozen,0.6969948935026541,0.6112083055479282
+NLP (filing events),2,dd_20,dd,longformer_ft + tfidf_lr,0.6427567557538707,0.6365220018885741
+NLP (filing events),2,dd_40,dd,longformer_ft + tfidf_lr,0.645344915867719,0.6126127567014267
+NLP (filing events),2,dd_5,dd,roberta_l_ft + tfidf_lr,0.7531871144619603,0.6056689377757682
+NLP (filing events),2,dir_10,dir,secbert_ft + deberta_l_ft,0.19533096926713947,0.2146668534341878
+NLP (filing events),2,dir_20,dir,secbert_ft + deberta_l_ft,0.31314173828875386,0.3376887227691486
+NLP (filing events),2,dir_40,dir,secbert_ft + fingpt_frozen,0.2610678969978901,0.27491014312840223
+NLP (filing events),2,dir_5,dir,secbert_ft + deberta_l_ft,0.2389393588988593,0.23310310700701584
+NLP (filing events),2,vol_10,vol,finbert_ft + tfidf_lr,-0.06719747194517134,-0.09937522104204355
+NLP (filing events),2,vol_20,vol,finbert_ft + tfidf_lr,-0.03455936182257857,-0.07771177511754002
+NLP (filing events),2,vol_40,vol,finbert_ft + roberta_l_ft,-0.03975998507152956,-0.04592361777544518
+NLP (filing events),2,vol_5,vol,finbert_ft + tfidf_lr,-0.043913878727586564,-0.06737132281978098
+NLP (filing events),3,dd_10,dd,roberta_l_ft + longformer_ft + fingpt_frozen,0.6955922865013774,0.5849161207651774
+NLP (filing events),3,dd_20,dd,roberta_l_ft + longformer_ft + tfidf_lr,0.6434061244747071,0.620647403210576
+NLP (filing events),3,dd_40,dd,longformer_ft + deberta_l_ft + tfidf_lr,0.6455091194801985,0.6131011025099695
+NLP (filing events),3,dd_5,dd,roberta_l_ft + longformer_ft + tfidf_lr,0.7640654068344267,0.6256619737341296
+NLP (filing events),3,dir_10,dir,secbert_ft + roberta_l_ft + deberta_l_ft,0.1900111012682358,0.20575995817942952
+NLP (filing events),3,dir_20,dir,secbert_ft + deberta_l_ft + fingpt_frozen,0.24707180368334347,0.26200427778764923
+NLP (filing events),3,dir_40,dir,secbert_ft + fingpt_frozen + tfidf_lr,0.2514219227951696,0.24434976869433797
+NLP (filing events),3,dir_5,dir,secbert_ft + roberta_l_ft + deberta_l_ft,0.23143929359823398,0.23332413360174906
+NLP (filing events),3,vol_10,vol,finbert_ft + fingpt_frozen + tfidf_lr,-0.07867460207645904,-0.09094301336934207
+NLP (filing events),3,vol_20,vol,finbert_ft + fingpt_frozen + tfidf_lr,-0.04739577740360068,-0.07144646145146538
+NLP (filing events),3,vol_40,vol,finbert_ft + roberta_l_ft + tfidf_lr,-0.03521687880523583,-0.05902467172176662
+NLP (filing events),3,vol_5,vol,finbert_ft + fingpt_frozen + tfidf_lr,-0.051749442831255266,-0.061779344931444546
+NLP (daily panel),1,dd_10,dd,roberta_l_panel_frozen,0.6498181923390657,0.5971682891183568
+NLP (daily panel),1,dd_20,dd,longformer_panel_frozen,0.6194671206786372,0.5745062209873472
+NLP (daily panel),1,dd_40,dd,longformer_panel_frozen,0.5785826247861344,0.5438748332471564
+NLP (daily panel),1,dd_5,dd,deberta_l_panel_frozen,0.6580915928939555,0.5836212354411588
+NLP (daily panel),1,dir_10,dir,longformer_panel_frozen,0.25304934211004976,0.27279237207589185
+NLP (daily panel),1,dir_20,dir,secbert_panel_frozen,0.2830076242400333,0.28706339411423815
+NLP (daily panel),1,dir_40,dir,roberta_l_panel_frozen,0.30241815515440335,0.30044174188766454
+NLP (daily panel),1,dir_5,dir,roberta_l_panel_frozen,0.22971684130035963,0.22065690896200943
+NLP (daily panel),1,vol_10,vol,deberta_l_panel_frozen,-0.06106106087143415,-0.09354376058394909
+NLP (daily panel),1,vol_20,vol,deberta_l_panel_frozen,-0.038065711150157,-0.11272055365262323
+NLP (daily panel),1,vol_40,vol,deberta_l_panel_frozen,0.0005566545174263693,-0.1577326587786092
+NLP (daily panel),1,vol_5,vol,deberta_l_panel_frozen,-0.06360201329714599,-0.0639565691269488
+NLP (daily panel),2,dd_10,dd,roberta_l_panel_frozen + roberta_l_panel_ft,0.6628139868702763,0.614917169077582
+NLP (daily panel),2,dd_20,dd,deberta_l_panel_frozen + roberta_l_panel_frozen,0.631228568087177,0.5791910819163424
+NLP (daily panel),2,dd_40,dd,longformer_panel_frozen + secbert_panel_frozen,0.5871485734711107,0.5626911118237036
+NLP (daily panel),2,dd_5,dd,deberta_l_panel_frozen + longformer_panel_frozen,0.6751602806804987,0.6123848391568698
+NLP (daily panel),2,dir_10,dir,longformer_panel_frozen + secbert_panel_frozen,0.24241221445465969,0.2578240744754849
+NLP (daily panel),2,dir_20,dir,secbert_panel_frozen + roberta_l_panel_frozen,0.27957092118871724,0.280676658853318
+NLP (daily panel),2,dir_40,dir,deberta_l_panel_frozen + finbert_panel_frozen,0.2993827732230128,0.2928147237167892
+NLP (daily panel),2,dir_5,dir,fingpt_panel_frozen + roberta_l_panel_frozen,0.22021265165681247,0.21373507397247718
+NLP (daily panel),2,vol_10,vol,deberta_l_panel_frozen + fingpt_panel_frozen,-0.06627960805403266,-0.1106034444943007
+NLP (daily panel),2,vol_20,vol,deberta_l_panel_frozen + roberta_l_panel_ft,-0.03922140115949757,-0.09834072698241059
+NLP (daily panel),2,vol_40,vol,deberta_l_panel_frozen + roberta_l_panel_ft,-0.005582426198108115,-0.15939453610368948
+NLP (daily panel),2,vol_5,vol,deberta_l_panel_frozen + fingpt_panel_frozen,-0.07137717242545683,-0.07975997568312354
+NLP (daily panel),3,dd_10,dd,deberta_l_panel_frozen + roberta_l_panel_frozen + roberta_l_panel_ft,0.6730126686714041,0.611385039653151
+NLP (daily panel),3,dd_20,dd,deberta_l_panel_frozen + longformer_panel_frozen + secbert_panel_frozen,0.6348137799107012,0.5897288568645886
+NLP (daily panel),3,dd_40,dd,longformer_panel_frozen + secbert_panel_frozen + roberta_l_panel_ft,0.5912759730821937,0.5792012094357024
+NLP (daily panel),3,dd_5,dd,deberta_l_panel_frozen + longformer_panel_frozen + roberta_l_panel_ft,0.6838661489956356,0.6224491327460676
+NLP (daily panel),3,dir_10,dir,longformer_panel_frozen + secbert_panel_frozen + finbert_panel_frozen,0.2345155990395352,0.2528553742391995
+NLP (daily panel),3,dir_20,dir,secbert_panel_frozen + fingpt_panel_frozen + roberta_l_panel_frozen,0.2774356252630808,0.27825600818897406
+NLP (daily panel),3,dir_40,dir,longformer_panel_frozen + roberta_l_panel_frozen + roberta_l_panel_ft,0.30141649057229225,0.2964014476322525
+NLP (daily panel),3,dir_5,dir,secbert_panel_frozen + roberta_l_panel_frozen + finbert_panel_frozen,0.21312113525912424,0.21791359240222863
+NLP (daily panel),3,vol_10,vol,deberta_l_panel_frozen + fingpt_panel_frozen + roberta_l_panel_ft,-0.07345510879906003,-0.11290111485832766
+NLP (daily panel),3,vol_20,vol,deberta_l_panel_frozen + fingpt_panel_frozen + roberta_l_panel_ft,-0.04762957882064289,-0.11905166699575531
+NLP (daily panel),3,vol_40,vol,deberta_l_panel_frozen + fingpt_panel_frozen + roberta_l_panel_ft,-0.013963447593845713,-0.18296428020094724
+NLP (daily panel),3,vol_5,vol,deberta_l_panel_frozen + fingpt_panel_frozen + roberta_l_panel_ft,-0.08272049362345024,-0.08647875691720519

@@ -1,0 +1,106 @@
+# %% [markdown]
+## 9. Computer-vision models, part 1: architectures and frozen pretrained features
+
+### 9.1 How the models process a chart
+* **Convolutional networks** (Custom CNN, ResNet-50, EfficientNet-B0, ConvNeXt-Tiny, YOLOv8 backbone) slide small learned filters over the image; early layers respond to edges (candle bodies, wicks), deeper layers to arrangements of candles (runs, gaps, volatility clusters). Pooling and strides shrink the map so deeper filters "see" more bars. ResNet's skip connections (y = x + F(x)) let gradients pass through 50 layers; EfficientNet uses depthwise-separable convolutions scaled jointly in depth, width and resolution; ConvNeXt uses 7×7 depthwise convolutions, LayerNorm and an inverted bottleneck borrowed from transformers.
+* **Vision Transformers** cut the 224 × 224 chart into 196 patches of 16 × 16 px (ViT) — about 4-5 candles each — embed each patch as a token, and let every patch attend to every other: a token for the last week can directly compare itself with one from a year ago. Swin restricts attention to shifted 7 × 7 windows and merges patches stage by stage (CNN-like hierarchy at lower cost).
+* **Our multi-view network.** One backbone (shared weights) encodes the weekly, daily and hourly chart separately; the three feature vectors are concatenated and a small multi-task head outputs, for each of the 4 horizons, 3 direction logits, one volatility value and one drawdown logit (12 tasks from one model).
+
+### 9.2 Transfer learning, step 1: frozen features
+Each ImageNet-pretrained backbone is used **unchanged** as a feature extractor; per view the features are reduced to 32 principal components (fitted on training rows) and a regularised linear model per task is trained on top (regularisation chosen on the inner block). This tells us how much a photo-trained network "already sees" in a chart. Controls: the same ResNet-50 with **random weights** (if it matches the pretrained one, pre-training is not what helps), and a probe trained on **shuffled labels** (must score at chance; checks the pipeline for leakage).
+
+# %%
+def extract_embeddings(name, spec, pretrained=True, seed=0, batch=128):
+    set_seed(seed)
+    net = ChartNet(spec, pretrained=pretrained).to(DEV).eval()
+    path = LOCAL_ROOT / f"emb_{name}{'' if pretrained else '_random'}_{N}.npy"
+    if path.exists():
+        return path
+    mm = np.lib.format.open_memmap(path, mode="w+", dtype=np.float16, shape=(N, 3, net.feat_dim))
+    with torch.no_grad():
+        for s in range(0, N, batch):
+            x = to_float_images(torch.from_numpy(np.ascontiguousarray(IMG[s: s + batch])).to(DEV), PAL_DARK_T)
+            with torch.autocast("cuda", dtype=AMP_DTYPE):
+                z = net.embed(x)
+            mm[s: s + batch] = z.float().cpu().numpy().astype(np.float16)
+    mm.flush(); del mm, net; torch.cuda.empty_cache()
+    return path
+
+def pca_per_view(E, fit_rows, k):
+    rng = np.random.default_rng(0)
+    fr = np.sort(rng.choice(fit_rows, min(len(fit_rows), 20000), replace=False))
+    out = np.zeros((E.shape[0], E.shape[1] * k), np.float32); pcas = []
+    for v in range(E.shape[1]):
+        pca = PCA(k, random_state=0).fit(np.asarray(E[fr, v], dtype=np.float32))
+        for s in range(0, E.shape[0], 20000):
+            out[s: s + 20000, v * k: (v + 1) * k] = pca.transform(np.asarray(E[s: s + 20000, v], dtype=np.float32))
+        pcas.append(pca)
+    return out, pcas
+
+FROZEN_CV = [n for n, s in CFG["cv_models"].items() if s["kind"] != "jkx"]      # the scratch CNN has no pretrained weights
+CV_PCA = {}
+k_pca = CFG["probe"]["pca_per_view"]
+for name in FROZEN_CV + ["resnet50_random"]:
+    base = "resnet50" if name == "resnet50_random" else name
+    spec = CFG["cv_models"][base]; pretrained = name != "resnet50_random"
+    fpath = SUB["features"] / f"cvpca_{name}_{N}.npy"
+    st = Stage(f"cv_frozen_{name}", [spec, pretrained, k_pca, N, CFG["probe"]], [fpath])
+    try:
+        if not (st.done() and fpath.exists()):
+            if not HAS_GPU:
+                not_run(f"{name}_frozen", "no GPU"); continue
+            t0 = time.time()
+            E = np.load(extract_embeddings(base, spec, pretrained), mmap_mode="r")
+            Z, _ = pca_per_view(E, np.flatnonzero(TR), k_pca)
+            np.save(fpath, Z); st.finish(extract_minutes=round((time.time() - t0) / 60, 2)); del E
+        CV_PCA[name] = np.load(fpath)
+        mid = f"{name}_frozen" if pretrained else "resnet50_random_frozen"
+        if not have_pred("panel", mid) or FORCE_RERUN:
+            finalize(PANEL, mid, fit_heads(PANEL, CV_PCA[name], TR, IN, "linear"), "cv_frozen", backbone=base, pretrained=pretrained)
+        print(f"{mid}: val primary", {t: round(v, 3) for t, v in REG[mid]["val_primary"].items() if v is not None and t.endswith("_20")})
+    except Exception as e:
+        failed(f"{name}_frozen", e)
+    gc.collect(); torch.cuda.empty_cache() if HAS_GPU else None
+
+# %% [markdown]
+### 9.3 Controls and the view ablation (which timeframe carries the signal?)
+
+# %%
+if "resnet50" in CV_PCA:
+    # label-shuffle control: labels permuted within month on the TRAINING rows only; evaluated against the true labels
+    rng = np.random.default_rng(5); Ysh = {k: v.copy() for k, v in Y.items()}
+    for g in month_groups(P["month"].values[TR]):
+        gi = np.flatnonzero(TR)[g]
+        perm = gi[rng.permutation(len(gi))]
+        for k in Ysh:
+            Ysh[k][gi] = Y[k][perm]
+    SH = EvalCtx("panel", Ysh, P["month"].values, P["block"].values, P["sector"].values, P["ticker"].values)
+    raw_sh = fit_heads(SH, CV_PCA["resnet50"], TR, IN, "linear")
+    finalize(PANEL, "resnet50_frozen_shuffled", raw_sh, "control", note="probe fitted on within-month shuffled training labels")
+VIEW_ABL = []
+for name in FROZEN_CV:
+    if name not in CV_PCA:
+        continue
+    for j, v in enumerate(VIEWS):
+        mid = f"{name}_frozen_{v}"
+        if not have_pred("panel", mid) or FORCE_RERUN:
+            finalize(PANEL, mid, fit_heads(PANEL, CV_PCA[name][:, j * k_pca: (j + 1) * k_pca], TR, IN, "linear"), "cv_view_ablation",
+                     backbone=name, view=v)
+        for t in TASKS:
+            VIEW_ABL.append({"backbone": name, "view": v, "task": t, "val_primary": REG.get(mid, {}).get("val_primary", {}).get(t)})
+    for t in TASKS:
+        VIEW_ABL.append({"backbone": name, "view": "W+D+H", "task": t, "val_primary": REG.get(f"{name}_frozen", {}).get("val_primary", {}).get(t)})
+VIEW_ABL_DF = pd.DataFrame(VIEW_ABL)
+if len(VIEW_ABL_DF):
+    VIEW_ABL_DF.to_csv(SUB["tables"] / "cv_view_ablation_val.csv", index=False)
+    piv = VIEW_ABL_DF.assign(target=VIEW_ABL_DF.task.str.split("_").str[0]).groupby(["view", "target"])["val_primary"].mean().unstack()
+    display(piv.round(4))
+    fig, ax = plt.subplots(1, 3, figsize=(14, 3.3))
+    for a_, kd in zip(ax, ["dir", "vol", "dd"]):
+        sub = VIEW_ABL_DF[VIEW_ABL_DF.task.str.startswith(kd)]
+        sub.groupby(["view", "backbone"])["val_primary"].mean().unstack().plot.bar(ax=a_, legend=(kd == "dd"))
+        a_.set_title(f"{TASK_LABEL[kd]}: frozen probe, mean over horizons"); a_.set_ylabel(PRIMARY[kd])
+    if ax[2].get_legend():
+        ax[2].legend(fontsize=6)
+    plt.tight_layout(); savefig(fig, "cv_view_ablation.png"); plt.show()
+tick("9 cv frozen")

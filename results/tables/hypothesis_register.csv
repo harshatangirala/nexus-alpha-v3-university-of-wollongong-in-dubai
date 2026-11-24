@@ -1,0 +1,27 @@
+id,module,type,statement,tests,outcome
+H1,CV,confirmatory,"The validation-chosen CV model has skill over the uninformed benchmark (shuffled null, R-squared 0, AUC 0.5)",12,supported in 6 of 12
+H2,NLP,confirmatory,The validation-chosen NLP model has skill on filing events,12,supported in 4 of 12
+H2b,NLP,confirmatory,NLP models carried to the daily panel have skill,12,supported in 4 of 12
+H3,CV+NLP,confirmatory,Fusion beats the better single modality,12,supported in 6 of 12
+H4,CV+NLP,confirmatory,Top-3 CV + top-3 NLP beats top-3 CV (Q10),12,supported in 3 of 12
+H5,CV,confirmatory,Fine-tuning beats frozen features,18,supported in 9 of 18
+H6,CV,confirmatory,CV model rankings depend on the sector,3,supported in 2 of 3
+H7,NLP,confirmatory,Filing days move prices more than non-filing days; reactions differ by form,2,supported in 2 of 2
+H1c,CV,post-hoc,Best CV model vs strongest numbers-only baseline,12,"better 4, no clear difference 0, worse 8"
+H1d,CV,post-hoc,Direction skill (own shuffled nulls): best CV vs numbers-only baseline,4,"better 1, no clear difference 3, worse 0"
+H2c,NLP,post-hoc,Best NLP model vs strongest no-text baseline on the same filings,12,"better 1, no clear difference 7, worse 4"
+H2d,NLP,post-hoc,Direction skill (own shuffled nulls): best NLP vs no-text baseline,4,"better 0, no clear difference 4, worse 0"
+H3c,CV+NLP,post-hoc,Best fusion vs strongest numbers-only baseline,12,"better 4, no clear difference 1, worse 7"
+H8,CV+NLP,post-hoc,Technical + CV + NLP features vs technical features (same LightGBM),12,"better 6, no clear difference 4, worse 2"
+H8b,CV,post-hoc,Technical + CV features vs technical features,12,"better 3, no clear difference 9, worse 0"
+H8c,NLP,post-hoc,Technical + NLP features vs technical features,12,"better 6, no clear difference 5, worse 1"
+H8d,NLP,post-hoc,Technical + filing-calendar columns vs technical features,12,"better 6, no clear difference 6, worse 0"
+H8e,NLP,post-hoc,Technical + text vs technical + filing calendar (the words),12,"better 3, no clear difference 6, worse 3"
+H8f,NLP,post-hoc,Technical + text vs technical + calendar + company (words beyond identity),12,"better 1, no clear difference 9, worse 2"
+H9a,CV,post-hoc,Best combination of 1-3 CV networks vs best single CV network,12,"better 5, no clear difference 7, worse 0"
+H9b,NLP,post-hoc,Best combination of 1-3 NLP models vs best single NLP model,12,"better 0, no clear difference 12, worse 0"
+H9c,CV+NLP,post-hoc,CV combination + NLP combination vs CV combination,12,"better 2, no clear difference 10, worse 0"
+H9d,CV+NLP,post-hoc,CV combination + NLP combination vs strongest numbers-only baseline,12,"better 4, no clear difference 3, worse 5"
+H10a,NLP,post-hoc,No-text model + text change (Lazy Prices) vs no-text model,12,"better 0, no clear difference 10, worse 2"
+H10b,NLP,post-hoc,No-text model + text change + Loughran-McDonald tone vs no-text model,12,"better 0, no clear difference 10, worse 2"
+H11,NLP,post-hoc,"Words explain the size of the reaction beyond form, item, sector and timing (and, in 2 of the tests, the company)",4,"better 2, no clear difference 2, worse 0"

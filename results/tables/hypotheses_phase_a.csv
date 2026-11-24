@@ -1,0 +1,13 @@
+family,tests,better,no clear difference,worse
+H1c best CV vs numbers-only baseline,12,4,0,8
+H2c best NLP (panel) vs numbers-only baseline,12,1,2,9
+H2c best NLP (events) vs no-text baseline,12,1,7,4
+H3c best fusion vs numbers-only baseline,12,4,1,7
+H8 technical + CV + NLP vs technical,12,6,4,2
+H8b technical + CV vs technical,12,3,9,0
+H8c technical + NLP vs technical,12,6,5,1
+H1d direction skill: best CV vs numbers-only baseline (own shuffled nulls),4,1,3,0
+"H2d direction skill: best NLP vs no-text baseline (events, own shuffled nulls)",4,0,4,0
+H8d technical + filing calendar vs technical,12,6,6,0
+H8e technical + text vs technical + calendar,12,3,6,3
+H8f technical + text vs technical + calendar + company,12,1,9,2

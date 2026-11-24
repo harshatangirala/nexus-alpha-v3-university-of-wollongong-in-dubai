@@ -1,0 +1,2 @@
+rows,views,height,width,colours,bytes_gb,train_rows,inner_rows,val_rows,test_rows
+64550,3,224,224,5,9.72,51250,2150,4600,6550

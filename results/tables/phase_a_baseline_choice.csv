@@ -1,0 +1,13 @@
+task,panel_baseline,event_baseline
+dir_5,baseline_simple,company_event
+dir_10,tech_gbm,company_event
+dir_20,baseline_simple,company_event
+dir_40,tech_gbm,company_event
+vol_5,tech_gbm,tech_event
+vol_10,tech_gbm,tech_event
+vol_20,tech_gbm,simple_event
+vol_40,tech_gbm,simple_event
+dd_5,baseline_simple,tech_event
+dd_10,baseline_simple,simple_event
+dd_20,baseline_simple,simple_event
+dd_40,tech_gbm,simple_event

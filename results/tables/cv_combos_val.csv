@@ -1,0 +1,757 @@
+combo,size,task,primary
+jkx_cnn + resnet50,2,dir_5,0.23103708394688205
+jkx_cnn + resnet50,2,dir_10,0.22491563052653282
+jkx_cnn + resnet50,2,dir_20,0.2802517748542244
+jkx_cnn + resnet50,2,dir_40,0.27160462605394997
+jkx_cnn + resnet50,2,vol_5,-0.05652120986599485
+jkx_cnn + resnet50,2,vol_10,-0.08917020044284674
+jkx_cnn + resnet50,2,vol_20,-0.15573377346406936
+jkx_cnn + resnet50,2,vol_40,-0.22505317042380235
+jkx_cnn + resnet50,2,dd_5,0.5031958613853207
+jkx_cnn + resnet50,2,dd_10,0.49810912566194604
+jkx_cnn + resnet50,2,dd_20,0.47573664695243945
+jkx_cnn + resnet50,2,dd_40,0.4494153628755774
+jkx_cnn + effnet_b0,2,dir_5,0.29083545953763373
+jkx_cnn + effnet_b0,2,dir_10,0.2743403489166201
+jkx_cnn + effnet_b0,2,dir_20,0.25565502054307826
+jkx_cnn + effnet_b0,2,dir_40,0.287668407532889
+jkx_cnn + effnet_b0,2,vol_5,-0.08940322813419321
+jkx_cnn + effnet_b0,2,vol_10,-0.09958040883309982
+jkx_cnn + effnet_b0,2,vol_20,-0.1071166157353396
+jkx_cnn + effnet_b0,2,vol_40,-0.1825616672186572
+jkx_cnn + effnet_b0,2,dd_5,0.48612258431658706
+jkx_cnn + effnet_b0,2,dd_10,0.48818273536532325
+jkx_cnn + effnet_b0,2,dd_20,0.5074960790824531
+jkx_cnn + effnet_b0,2,dd_40,0.4829045623531801
+jkx_cnn + convnext_t,2,dir_5,0.2609104365623485
+jkx_cnn + convnext_t,2,dir_10,0.26854005556129795
+jkx_cnn + convnext_t,2,dir_20,0.3067656440071472
+jkx_cnn + convnext_t,2,dir_40,0.27927417973256685
+jkx_cnn + convnext_t,2,vol_5,-0.07495753741556421
+jkx_cnn + convnext_t,2,vol_10,-0.10427218864031262
+jkx_cnn + convnext_t,2,vol_20,-0.16161824407100922
+jkx_cnn + convnext_t,2,vol_40,-0.2279064689806709
+jkx_cnn + convnext_t,2,dd_5,0.48796116549410506
+jkx_cnn + convnext_t,2,dd_10,0.47492934887098187
+jkx_cnn + convnext_t,2,dd_20,0.4629926207392
+jkx_cnn + convnext_t,2,dd_40,0.4454887401049603
+jkx_cnn + vit_b16,2,dir_5,0.2712209164513129
+jkx_cnn + vit_b16,2,dir_10,0.277581282266546
+jkx_cnn + vit_b16,2,dir_20,0.3021437036649318
+jkx_cnn + vit_b16,2,dir_40,0.2735845656891322
+jkx_cnn + vit_b16,2,vol_5,-0.011666450053114286
+jkx_cnn + vit_b16,2,vol_10,-0.03882918347015285
+jkx_cnn + vit_b16,2,vol_20,-0.07731894876039669
+jkx_cnn + vit_b16,2,vol_40,-0.15005319835286235
+jkx_cnn + vit_b16,2,dd_5,0.4949644101166137
+jkx_cnn + vit_b16,2,dd_10,0.4914140678810821
+jkx_cnn + vit_b16,2,dd_20,0.4905861432372265
+jkx_cnn + vit_b16,2,dd_40,0.4799856982513837
+jkx_cnn + swin_t,2,dir_5,0.26845358112506723
+jkx_cnn + swin_t,2,dir_10,0.25657451939386106
+jkx_cnn + swin_t,2,dir_20,0.30190906249753424
+jkx_cnn + swin_t,2,dir_40,0.2666289738919299
+jkx_cnn + swin_t,2,vol_5,-0.015197914132382806
+jkx_cnn + swin_t,2,vol_10,-0.04947671454518776
+jkx_cnn + swin_t,2,vol_20,-0.10438472092115658
+jkx_cnn + swin_t,2,vol_40,-0.16418046691370902
+jkx_cnn + swin_t,2,dd_5,0.5133594004561747
+jkx_cnn + swin_t,2,dd_10,0.47952960534297995
+jkx_cnn + swin_t,2,dd_20,0.4632301730006975
+jkx_cnn + swin_t,2,dd_40,0.45277730699146485
+jkx_cnn + yolov8_cls,2,dir_5,0.27555748151258186
+jkx_cnn + yolov8_cls,2,dir_10,0.2829937341416464
+jkx_cnn + yolov8_cls,2,dir_20,0.2800988411950563
+jkx_cnn + yolov8_cls,2,dir_40,0.27357668064389223
+jkx_cnn + yolov8_cls,2,vol_5,-0.07375419173426945
+jkx_cnn + yolov8_cls,2,vol_10,-0.08461086014502617
+jkx_cnn + yolov8_cls,2,vol_20,-0.09482630275383075
+jkx_cnn + yolov8_cls,2,vol_40,-0.1479293105340156
+jkx_cnn + yolov8_cls,2,dd_5,0.4754243938705547
+jkx_cnn + yolov8_cls,2,dd_10,0.4654210788623395
+jkx_cnn + yolov8_cls,2,dd_20,0.44349075477923827
+jkx_cnn + yolov8_cls,2,dd_40,0.42800605449963647
+resnet50 + effnet_b0,2,dir_5,0.3327480091071806
+resnet50 + effnet_b0,2,dir_10,0.23373683577398066
+resnet50 + effnet_b0,2,dir_20,0.22783702035782624
+resnet50 + effnet_b0,2,dir_40,0.32036745474828693
+resnet50 + effnet_b0,2,vol_5,-0.08553195596911256
+resnet50 + effnet_b0,2,vol_10,-0.11620445579316896
+resnet50 + effnet_b0,2,vol_20,-0.1637445634466379
+resnet50 + effnet_b0,2,vol_40,-0.2523817032883493
+resnet50 + effnet_b0,2,dd_5,0.5343714289647956
+resnet50 + effnet_b0,2,dd_10,0.5332986610817743
+resnet50 + effnet_b0,2,dd_20,0.5234539785566011
+resnet50 + effnet_b0,2,dd_40,0.49244280343679087
+resnet50 + convnext_t,2,dir_5,0.3062382295658596
+resnet50 + convnext_t,2,dir_10,0.34283719734269447
+resnet50 + convnext_t,2,dir_20,0.3442382464277311
+resnet50 + convnext_t,2,dir_40,0.32025661949963735
+resnet50 + convnext_t,2,vol_5,-0.069480039813129
+resnet50 + convnext_t,2,vol_10,-0.1203838480824746
+resnet50 + convnext_t,2,vol_20,-0.22148273160341425
+resnet50 + convnext_t,2,vol_40,-0.2993692699120072
+resnet50 + convnext_t,2,dd_5,0.5234609842174586
+resnet50 + convnext_t,2,dd_10,0.5083271735255194
+resnet50 + convnext_t,2,dd_20,0.48483529013745663
+resnet50 + convnext_t,2,dd_40,0.4526656428802903
+resnet50 + vit_b16,2,dir_5,0.32291639279158274
+resnet50 + vit_b16,2,dir_10,0.3441830120560891
+resnet50 + vit_b16,2,dir_20,0.33748246585951575
+resnet50 + vit_b16,2,dir_40,0.32506599421827337
+resnet50 + vit_b16,2,vol_5,-0.005694351448047641
+resnet50 + vit_b16,2,vol_10,-0.05406904063076534
+resnet50 + vit_b16,2,vol_20,-0.1318306375068219
+resnet50 + vit_b16,2,vol_40,-0.21664903331057528
+resnet50 + vit_b16,2,dd_5,0.5299731756455973
+resnet50 + vit_b16,2,dd_10,0.5281388887333381
+resnet50 + vit_b16,2,dd_20,0.5109857479084959
+resnet50 + vit_b16,2,dd_40,0.49584110793051633
+resnet50 + swin_t,2,dir_5,0.3077495461689887
+resnet50 + swin_t,2,dir_10,0.3361770103548322
+resnet50 + swin_t,2,dir_20,0.34294084310586476
+resnet50 + swin_t,2,dir_40,0.30818459071481336
+resnet50 + swin_t,2,vol_5,-0.0057189842272447056
+resnet50 + swin_t,2,vol_10,-0.06298656744259468
+resnet50 + swin_t,2,vol_20,-0.16163727739648004
+resnet50 + swin_t,2,vol_40,-0.23265973341323187
+resnet50 + swin_t,2,dd_5,0.5573516858728126
+resnet50 + swin_t,2,dd_10,0.5272676492493434
+resnet50 + swin_t,2,dd_20,0.4957313685933982
+resnet50 + swin_t,2,dd_40,0.4683123280953858
+resnet50 + yolov8_cls,2,dir_5,0.3262990150767476
+resnet50 + yolov8_cls,2,dir_10,0.32107015820258394
+resnet50 + yolov8_cls,2,dir_20,0.2892863840229137
+resnet50 + yolov8_cls,2,dir_40,0.3069914323785054
+resnet50 + yolov8_cls,2,vol_5,-0.06916232444129711
+resnet50 + yolov8_cls,2,vol_10,-0.10073871827396252
+resnet50 + yolov8_cls,2,vol_20,-0.1485160300483057
+resnet50 + yolov8_cls,2,vol_40,-0.2132913930170428
+resnet50 + yolov8_cls,2,dd_5,0.5211537225962487
+resnet50 + yolov8_cls,2,dd_10,0.49833498528179254
+resnet50 + yolov8_cls,2,dd_20,0.4610061878448424
+resnet50 + yolov8_cls,2,dd_40,0.42768218883911246
+effnet_b0 + convnext_t,2,dir_5,0.3216443995427836
+effnet_b0 + convnext_t,2,dir_10,0.2728254136284156
+effnet_b0 + convnext_t,2,dir_20,0.26479422715419204
+effnet_b0 + convnext_t,2,dir_40,0.3287090652530627
+effnet_b0 + convnext_t,2,vol_5,-0.1035882750484205
+effnet_b0 + convnext_t,2,vol_10,-0.13185890711049075
+effnet_b0 + convnext_t,2,vol_20,-0.16943132977676
+effnet_b0 + convnext_t,2,vol_40,-0.25572334423654675
+effnet_b0 + convnext_t,2,dd_5,0.4867427110725611
+effnet_b0 + convnext_t,2,dd_10,0.49078992068780786
+effnet_b0 + convnext_t,2,dd_20,0.5169231186905076
+effnet_b0 + convnext_t,2,dd_40,0.4847415561963548
+effnet_b0 + vit_b16,2,dir_5,0.26797857356093263
+effnet_b0 + vit_b16,2,dir_10,0.23114082430741936
+effnet_b0 + vit_b16,2,dir_20,0.2593396691651227
+effnet_b0 + vit_b16,2,dir_40,0.3319998148074755
+effnet_b0 + vit_b16,2,vol_5,-0.03539096660475671
+effnet_b0 + vit_b16,2,vol_10,-0.06233351638943696
+effnet_b0 + vit_b16,2,vol_20,-0.08072020005672687
+effnet_b0 + vit_b16,2,vol_40,-0.17219578067356545
+effnet_b0 + vit_b16,2,dd_5,0.5104721682981564
+effnet_b0 + vit_b16,2,dd_10,0.5222903378747916
+effnet_b0 + vit_b16,2,dd_20,0.536146578620923
+effnet_b0 + vit_b16,2,dd_40,0.5101225901066789
+effnet_b0 + swin_t,2,dir_5,0.27131778677080215
+effnet_b0 + swin_t,2,dir_10,0.2039243466080565
+effnet_b0 + swin_t,2,dir_20,0.2229828841342656
+effnet_b0 + swin_t,2,dir_40,0.32654784034783096
+effnet_b0 + swin_t,2,vol_5,-0.03921093279671539
+effnet_b0 + swin_t,2,vol_10,-0.07659837787655133
+effnet_b0 + swin_t,2,vol_20,-0.11493890302853815
+effnet_b0 + swin_t,2,vol_40,-0.1929947648377619
+effnet_b0 + swin_t,2,dd_5,0.5663048017659558
+effnet_b0 + swin_t,2,dd_10,0.5194339603271044
+effnet_b0 + swin_t,2,dd_20,0.5362765797486436
+effnet_b0 + swin_t,2,dd_40,0.5049546478795442
+effnet_b0 + yolov8_cls,2,dir_5,0.20632917381755825
+effnet_b0 + yolov8_cls,2,dir_10,0.18191473548286294
+effnet_b0 + yolov8_cls,2,dir_20,0.22585444749181063
+effnet_b0 + yolov8_cls,2,dir_40,0.309175115536889
+effnet_b0 + yolov8_cls,2,vol_5,-0.11266847845156014
+effnet_b0 + yolov8_cls,2,vol_10,-0.12294981379051051
+effnet_b0 + yolov8_cls,2,vol_20,-0.11144768853807263
+effnet_b0 + yolov8_cls,2,vol_40,-0.17955223909371676
+effnet_b0 + yolov8_cls,2,dd_5,0.46076278459286185
+effnet_b0 + yolov8_cls,2,dd_10,0.47827804439168164
+effnet_b0 + yolov8_cls,2,dd_20,0.489630452215971
+effnet_b0 + yolov8_cls,2,dd_40,0.4646148949195015
+convnext_t + vit_b16,2,dir_5,0.33859059107516853
+convnext_t + vit_b16,2,dir_10,0.3358665051442134
+convnext_t + vit_b16,2,dir_20,0.34428999314776765
+convnext_t + vit_b16,2,dir_40,0.3215891289996728
+convnext_t + vit_b16,2,vol_5,-0.02456984875104662
+convnext_t + vit_b16,2,vol_10,-0.06946045074347329
+convnext_t + vit_b16,2,vol_20,-0.13817965041142455
+convnext_t + vit_b16,2,vol_40,-0.22126842577899786
+convnext_t + vit_b16,2,dd_5,0.5075608424086389
+convnext_t + vit_b16,2,dd_10,0.49950278217986266
+convnext_t + vit_b16,2,dd_20,0.49958167307796725
+convnext_t + vit_b16,2,dd_40,0.48691423779011556
+convnext_t + swin_t,2,dir_5,0.3207523167860376
+convnext_t + swin_t,2,dir_10,0.3361024274934982
+convnext_t + swin_t,2,dir_20,0.34336849885835297
+convnext_t + swin_t,2,dir_40,0.317636007137944
+convnext_t + swin_t,2,vol_5,-0.02600571886204528
+convnext_t + swin_t,2,vol_10,-0.08019683918780873
+convnext_t + swin_t,2,vol_20,-0.16837465446654964
+convnext_t + swin_t,2,vol_40,-0.23697593793991456
+convnext_t + swin_t,2,dd_5,0.5254303599374022
+convnext_t + swin_t,2,dd_10,0.48206189300227165
+convnext_t + swin_t,2,dd_20,0.4725881658250529
+convnext_t + swin_t,2,dd_40,0.4535244829524468
+convnext_t + yolov8_cls,2,dir_5,0.3313179138030426
+convnext_t + yolov8_cls,2,dir_10,0.31626920769468286
+convnext_t + yolov8_cls,2,dir_20,0.3106479131387555
+convnext_t + yolov8_cls,2,dir_40,0.3023810317598519
+convnext_t + yolov8_cls,2,vol_5,-0.08987454145551466
+convnext_t + yolov8_cls,2,vol_10,-0.11913825482810614
+convnext_t + yolov8_cls,2,vol_20,-0.15779328361763767
+convnext_t + yolov8_cls,2,vol_40,-0.22050293727470427
+convnext_t + yolov8_cls,2,dd_5,0.47184532742233787
+convnext_t + yolov8_cls,2,dd_10,0.46167176250767644
+convnext_t + yolov8_cls,2,dd_20,0.4498370548113992
+convnext_t + yolov8_cls,2,dd_40,0.4301420776796754
+vit_b16 + swin_t,2,dir_5,0.3161437869538328
+vit_b16 + swin_t,2,dir_10,0.33219839888533537
+vit_b16 + swin_t,2,dir_20,0.3289835583842416
+vit_b16 + swin_t,2,dir_40,0.3077150006226834
+vit_b16 + swin_t,2,vol_5,0.033992326545271956
+vit_b16 + swin_t,2,vol_10,-0.014713095920268149
+vit_b16 + swin_t,2,vol_20,-0.08060410019425746
+vit_b16 + swin_t,2,vol_40,-0.15630584925714408
+vit_b16 + swin_t,2,dd_5,0.5309707708617295
+vit_b16 + swin_t,2,dd_10,0.5150623633875956
+vit_b16 + swin_t,2,dd_20,0.5166832170110391
+vit_b16 + swin_t,2,dd_40,0.5059318081976161
+vit_b16 + yolov8_cls,2,dir_5,0.30770250750621536
+vit_b16 + yolov8_cls,2,dir_10,0.30134646379776736
+vit_b16 + yolov8_cls,2,dir_20,0.30211173117903733
+vit_b16 + yolov8_cls,2,dir_40,0.3053040517719799
+vit_b16 + yolov8_cls,2,vol_5,-0.02036530428971295
+vit_b16 + yolov8_cls,2,vol_10,-0.04751325122385808
+vit_b16 + yolov8_cls,2,vol_20,-0.06720903477257933
+vit_b16 + yolov8_cls,2,vol_40,-0.13627450054512313
+vit_b16 + yolov8_cls,2,dd_5,0.49864903005520905
+vit_b16 + yolov8_cls,2,dd_10,0.49179648928286773
+vit_b16 + yolov8_cls,2,dd_20,0.4832649652703815
+vit_b16 + yolov8_cls,2,dd_40,0.46872620059285297
+swin_t + yolov8_cls,2,dir_5,0.30411033205978705
+swin_t + yolov8_cls,2,dir_10,0.3096768068902728
+swin_t + yolov8_cls,2,dir_20,0.29015114625817573
+swin_t + yolov8_cls,2,dir_40,0.2990238385831852
+swin_t + yolov8_cls,2,vol_5,-0.024618670468393722
+swin_t + yolov8_cls,2,vol_10,-0.06098993121951435
+swin_t + yolov8_cls,2,vol_20,-0.09970041964403964
+swin_t + yolov8_cls,2,vol_40,-0.15629600240399144
+swin_t + yolov8_cls,2,dd_5,0.5227588240423315
+swin_t + yolov8_cls,2,dd_10,0.4676150437439685
+swin_t + yolov8_cls,2,dd_20,0.4418466842925224
+swin_t + yolov8_cls,2,dd_40,0.4274552841861564
+jkx_cnn + resnet50 + effnet_b0,3,dir_5,0.2665387754877413
+jkx_cnn + resnet50 + effnet_b0,3,dir_10,0.28446145830414094
+jkx_cnn + resnet50 + effnet_b0,3,dir_20,0.25895252246263095
+jkx_cnn + resnet50 + effnet_b0,3,dir_40,0.2914828426610035
+jkx_cnn + resnet50 + effnet_b0,3,vol_5,-0.06933294664703249
+jkx_cnn + resnet50 + effnet_b0,3,vol_10,-0.09312729470287429
+jkx_cnn + resnet50 + effnet_b0,3,vol_20,-0.13347350210927278
+jkx_cnn + resnet50 + effnet_b0,3,vol_40,-0.2123624956546133
+jkx_cnn + resnet50 + effnet_b0,3,dd_5,0.501249432076329
+jkx_cnn + resnet50 + effnet_b0,3,dd_10,0.5048900474305201
+jkx_cnn + resnet50 + effnet_b0,3,dd_20,0.5036045292601735
+jkx_cnn + resnet50 + effnet_b0,3,dd_40,0.476289755254919
+jkx_cnn + resnet50 + convnext_t,3,dir_5,0.24937442517226446
+jkx_cnn + resnet50 + convnext_t,3,dir_10,0.2771870844983725
+jkx_cnn + resnet50 + convnext_t,3,dir_20,0.3037892774074593
+jkx_cnn + resnet50 + convnext_t,3,dir_40,0.28698180160676373
+jkx_cnn + resnet50 + convnext_t,3,vol_5,-0.05850533628148802
+jkx_cnn + resnet50 + convnext_t,3,vol_10,-0.09531135434931448
+jkx_cnn + resnet50 + convnext_t,3,vol_20,-0.1702482892568744
+jkx_cnn + resnet50 + convnext_t,3,vol_40,-0.2422764107560793
+jkx_cnn + resnet50 + convnext_t,3,dd_5,0.5017003290515331
+jkx_cnn + resnet50 + convnext_t,3,dd_10,0.49387005792085953
+jkx_cnn + resnet50 + convnext_t,3,dd_20,0.4735570396915893
+jkx_cnn + resnet50 + convnext_t,3,dd_40,0.44514500538550844
+jkx_cnn + resnet50 + vit_b16,3,dir_5,0.2585802135011943
+jkx_cnn + resnet50 + vit_b16,3,dir_10,0.2719221250689721
+jkx_cnn + resnet50 + vit_b16,3,dir_20,0.3039807349691879
+jkx_cnn + resnet50 + vit_b16,3,dir_40,0.2801907828072064
+jkx_cnn + resnet50 + vit_b16,3,vol_5,-0.015763671697271553
+jkx_cnn + resnet50 + vit_b16,3,vol_10,-0.05122987817485147
+jkx_cnn + resnet50 + vit_b16,3,vol_20,-0.11176940669444857
+jkx_cnn + resnet50 + vit_b16,3,vol_40,-0.18813944356601042
+jkx_cnn + resnet50 + vit_b16,3,dd_5,0.5067634546280616
+jkx_cnn + resnet50 + vit_b16,3,dd_10,0.5055022949950628
+jkx_cnn + resnet50 + vit_b16,3,dd_20,0.4941823190112814
+jkx_cnn + resnet50 + vit_b16,3,dd_40,0.47550015885312613
+jkx_cnn + resnet50 + swin_t,3,dir_5,0.2523743479752829
+jkx_cnn + resnet50 + swin_t,3,dir_10,0.25729413913262095
+jkx_cnn + resnet50 + swin_t,3,dir_20,0.30310545481205686
+jkx_cnn + resnet50 + swin_t,3,dir_40,0.27724887451002395
+jkx_cnn + resnet50 + swin_t,3,vol_5,-0.017351127371745267
+jkx_cnn + resnet50 + swin_t,3,vol_10,-0.0585743472600575
+jkx_cnn + resnet50 + swin_t,3,vol_20,-0.13213306346026132
+jkx_cnn + resnet50 + swin_t,3,vol_40,-0.19962257205315703
+jkx_cnn + resnet50 + swin_t,3,dd_5,0.5185039857915823
+jkx_cnn + resnet50 + swin_t,3,dd_10,0.4989269334796754
+jkx_cnn + resnet50 + swin_t,3,dd_20,0.47490873816415435
+jkx_cnn + resnet50 + swin_t,3,dd_40,0.4493894337536765
+jkx_cnn + resnet50 + yolov8_cls,3,dir_5,0.2616753988072835
+jkx_cnn + resnet50 + yolov8_cls,3,dir_10,0.27991204662209374
+jkx_cnn + resnet50 + yolov8_cls,3,dir_20,0.2792746351927646
+jkx_cnn + resnet50 + yolov8_cls,3,dir_40,0.2780937312331804
+jkx_cnn + resnet50 + yolov8_cls,3,vol_5,-0.058196721016601005
+jkx_cnn + resnet50 + yolov8_cls,3,vol_10,-0.08226322644297945
+jkx_cnn + resnet50 + yolov8_cls,3,vol_20,-0.12280135645904644
+jkx_cnn + resnet50 + yolov8_cls,3,vol_40,-0.18615272444587982
+jkx_cnn + resnet50 + yolov8_cls,3,dd_5,0.49533384733293867
+jkx_cnn + resnet50 + yolov8_cls,3,dd_10,0.4854577203857906
+jkx_cnn + resnet50 + yolov8_cls,3,dd_20,0.4562604940669365
+jkx_cnn + resnet50 + yolov8_cls,3,dd_40,0.4284834086403782
+jkx_cnn + effnet_b0 + convnext_t,3,dir_5,0.29293504950693977
+jkx_cnn + effnet_b0 + convnext_t,3,dir_10,0.28753834923304344
+jkx_cnn + effnet_b0 + convnext_t,3,dir_20,0.271321399286925
+jkx_cnn + effnet_b0 + convnext_t,3,dir_40,0.29473650369309934
+jkx_cnn + effnet_b0 + convnext_t,3,vol_5,-0.08103422996068477
+jkx_cnn + effnet_b0 + convnext_t,3,vol_10,-0.10336451316578787
+jkx_cnn + effnet_b0 + convnext_t,3,vol_20,-0.13772073659924544
+jkx_cnn + effnet_b0 + convnext_t,3,vol_40,-0.21467811838079354
+jkx_cnn + effnet_b0 + convnext_t,3,dd_5,0.4855552343058022
+jkx_cnn + effnet_b0 + convnext_t,3,dd_10,0.48327542180683963
+jkx_cnn + effnet_b0 + convnext_t,3,dd_20,0.49862219688331433
+jkx_cnn + effnet_b0 + convnext_t,3,dd_40,0.47224898474076143
+jkx_cnn + effnet_b0 + vit_b16,3,dir_5,0.2994482490969814
+jkx_cnn + effnet_b0 + vit_b16,3,dir_10,0.2831469601435961
+jkx_cnn + effnet_b0 + vit_b16,3,dir_20,0.26460552274554955
+jkx_cnn + effnet_b0 + vit_b16,3,dir_40,0.2883991873629698
+jkx_cnn + effnet_b0 + vit_b16,3,vol_5,-0.0363318453415431
+jkx_cnn + effnet_b0 + vit_b16,3,vol_10,-0.05785611109383848
+jkx_cnn + effnet_b0 + vit_b16,3,vol_20,-0.0796600604264015
+jkx_cnn + effnet_b0 + vit_b16,3,vol_40,-0.1601823392078141
+jkx_cnn + effnet_b0 + vit_b16,3,dd_5,0.49327325962946134
+jkx_cnn + effnet_b0 + vit_b16,3,dd_10,0.4981114589224816
+jkx_cnn + effnet_b0 + vit_b16,3,dd_20,0.5140440374904457
+jkx_cnn + effnet_b0 + vit_b16,3,dd_40,0.493078116596009
+jkx_cnn + effnet_b0 + swin_t,3,dir_5,0.2980724704403661
+jkx_cnn + effnet_b0 + swin_t,3,dir_10,0.2829752989693226
+jkx_cnn + effnet_b0 + swin_t,3,dir_20,0.2565946916862753
+jkx_cnn + effnet_b0 + swin_t,3,dir_40,0.28063429537596446
+jkx_cnn + effnet_b0 + swin_t,3,vol_5,-0.03960611586613294
+jkx_cnn + effnet_b0 + swin_t,3,vol_10,-0.06757717336806013
+jkx_cnn + effnet_b0 + swin_t,3,vol_20,-0.10198463411761538
+jkx_cnn + effnet_b0 + swin_t,3,vol_40,-0.17379359394453386
+jkx_cnn + effnet_b0 + swin_t,3,dd_5,0.5111186834267252
+jkx_cnn + effnet_b0 + swin_t,3,dd_10,0.4894779282886374
+jkx_cnn + effnet_b0 + swin_t,3,dd_20,0.5071967893376104
+jkx_cnn + effnet_b0 + swin_t,3,dd_40,0.4828556844682175
+jkx_cnn + effnet_b0 + yolov8_cls,3,dir_5,0.29802467058076215
+jkx_cnn + effnet_b0 + yolov8_cls,3,dir_10,0.2645456948296719
+jkx_cnn + effnet_b0 + yolov8_cls,3,dir_20,0.2531853435876665
+jkx_cnn + effnet_b0 + yolov8_cls,3,dir_40,0.278441255965228
+jkx_cnn + effnet_b0 + yolov8_cls,3,vol_5,-0.08490246748467434
+jkx_cnn + effnet_b0 + yolov8_cls,3,vol_10,-0.09508795703213391
+jkx_cnn + effnet_b0 + yolov8_cls,3,vol_20,-0.0969329417198268
+jkx_cnn + effnet_b0 + yolov8_cls,3,vol_40,-0.16295744173820959
+jkx_cnn + effnet_b0 + yolov8_cls,3,dd_5,0.4730305095480016
+jkx_cnn + effnet_b0 + yolov8_cls,3,dd_10,0.47343582880214136
+jkx_cnn + effnet_b0 + yolov8_cls,3,dd_20,0.477754666466183
+jkx_cnn + effnet_b0 + yolov8_cls,3,dd_40,0.4569156345849582
+jkx_cnn + convnext_t + vit_b16,3,dir_5,0.2786730601352651
+jkx_cnn + convnext_t + vit_b16,3,dir_10,0.28539920037692884
+jkx_cnn + convnext_t + vit_b16,3,dir_20,0.31699777226789166
+jkx_cnn + convnext_t + vit_b16,3,dir_40,0.29059141009697503
+jkx_cnn + convnext_t + vit_b16,3,vol_5,-0.02782903422145311
+jkx_cnn + convnext_t + vit_b16,3,vol_10,-0.06135018943571424
+jkx_cnn + convnext_t + vit_b16,3,vol_20,-0.11631097299530135
+jkx_cnn + convnext_t + vit_b16,3,vol_40,-0.19102295585673534
+jkx_cnn + convnext_t + vit_b16,3,dd_5,0.49382397349230606
+jkx_cnn + convnext_t + vit_b16,3,dd_10,0.48693700756536396
+jkx_cnn + convnext_t + vit_b16,3,dd_20,0.4852768501927567
+jkx_cnn + convnext_t + vit_b16,3,dd_40,0.47208983357874934
+jkx_cnn + convnext_t + swin_t,3,dir_5,0.27835531142084363
+jkx_cnn + convnext_t + swin_t,3,dir_10,0.2831634598956214
+jkx_cnn + convnext_t + swin_t,3,dir_20,0.31136427913881476
+jkx_cnn + convnext_t + swin_t,3,dir_40,0.28500471153513174
+jkx_cnn + convnext_t + swin_t,3,vol_5,-0.030043706487838717
+jkx_cnn + convnext_t + swin_t,3,vol_10,-0.06950304146870101
+jkx_cnn + convnext_t + swin_t,3,vol_20,-0.13684723605687732
+jkx_cnn + convnext_t + swin_t,3,vol_40,-0.20237133414755282
+jkx_cnn + convnext_t + swin_t,3,dd_5,0.5051090183984323
+jkx_cnn + convnext_t + swin_t,3,dd_10,0.4762889397850787
+jkx_cnn + convnext_t + swin_t,3,dd_20,0.46201447972400084
+jkx_cnn + convnext_t + swin_t,3,dd_40,0.44546748021190746
+jkx_cnn + convnext_t + yolov8_cls,3,dir_5,0.28060243649736866
+jkx_cnn + convnext_t + yolov8_cls,3,dir_10,0.29134182359171845
+jkx_cnn + convnext_t + yolov8_cls,3,dir_20,0.2990749044441315
+jkx_cnn + convnext_t + yolov8_cls,3,dir_40,0.2788216054812205
+jkx_cnn + convnext_t + yolov8_cls,3,vol_5,-0.07107840341243521
+jkx_cnn + convnext_t + yolov8_cls,3,vol_10,-0.09372048278892486
+jkx_cnn + convnext_t + yolov8_cls,3,vol_20,-0.12864436305533467
+jkx_cnn + convnext_t + yolov8_cls,3,vol_40,-0.19018830419848887
+jkx_cnn + convnext_t + yolov8_cls,3,dd_5,0.47749301281786516
+jkx_cnn + convnext_t + yolov8_cls,3,dd_10,0.46530628244398775
+jkx_cnn + convnext_t + yolov8_cls,3,dd_20,0.44818254246703504
+jkx_cnn + convnext_t + yolov8_cls,3,dd_40,0.42950924815282326
+jkx_cnn + vit_b16 + swin_t,3,dir_5,0.28636235447206904
+jkx_cnn + vit_b16 + swin_t,3,dir_10,0.28223623524223646
+jkx_cnn + vit_b16 + swin_t,3,dir_20,0.30703943643787507
+jkx_cnn + vit_b16 + swin_t,3,dir_40,0.28669307941080563
+jkx_cnn + vit_b16 + swin_t,3,vol_5,0.011014561226259878
+jkx_cnn + vit_b16 + swin_t,3,vol_10,-0.025790927153868326
+jkx_cnn + vit_b16 + swin_t,3,vol_20,-0.07920459341636255
+jkx_cnn + vit_b16 + swin_t,3,vol_40,-0.1491455438102225
+jkx_cnn + vit_b16 + swin_t,3,dd_5,0.5084087122933102
+jkx_cnn + vit_b16 + swin_t,3,dd_10,0.4920963132616929
+jkx_cnn + vit_b16 + swin_t,3,dd_20,0.49016481428111985
+jkx_cnn + vit_b16 + swin_t,3,dd_40,0.47995162281532244
+jkx_cnn + vit_b16 + yolov8_cls,3,dir_5,0.2871848088660315
+jkx_cnn + vit_b16 + yolov8_cls,3,dir_10,0.29212564762313065
+jkx_cnn + vit_b16 + yolov8_cls,3,dir_20,0.2954981565914582
+jkx_cnn + vit_b16 + yolov8_cls,3,dir_40,0.2791578186657297
+jkx_cnn + vit_b16 + yolov8_cls,3,vol_5,-0.02579293936123217
+jkx_cnn + vit_b16 + yolov8_cls,3,vol_10,-0.04727891943555562
+jkx_cnn + vit_b16 + yolov8_cls,3,vol_20,-0.06975118949359049
+jkx_cnn + vit_b16 + yolov8_cls,3,vol_40,-0.1353810258403536
+jkx_cnn + vit_b16 + yolov8_cls,3,dd_5,0.48707772867245835
+jkx_cnn + vit_b16 + yolov8_cls,3,dd_10,0.4814347125703011
+jkx_cnn + vit_b16 + yolov8_cls,3,dd_20,0.4725081550908233
+jkx_cnn + vit_b16 + yolov8_cls,3,dd_40,0.45844068420296563
+jkx_cnn + swin_t + yolov8_cls,3,dir_5,0.2895604144980362
+jkx_cnn + swin_t + yolov8_cls,3,dir_10,0.28987713650103514
+jkx_cnn + swin_t + yolov8_cls,3,dir_20,0.28887593770309633
+jkx_cnn + swin_t + yolov8_cls,3,dir_40,0.2797466843913792
+jkx_cnn + swin_t + yolov8_cls,3,vol_5,-0.029259832102143335
+jkx_cnn + swin_t + yolov8_cls,3,vol_10,-0.05664967882468486
+jkx_cnn + swin_t + yolov8_cls,3,vol_20,-0.09130806625131527
+jkx_cnn + swin_t + yolov8_cls,3,vol_40,-0.14864673288581676
+jkx_cnn + swin_t + yolov8_cls,3,dd_5,0.49762848842812496
+jkx_cnn + swin_t + yolov8_cls,3,dd_10,0.4671915569567563
+jkx_cnn + swin_t + yolov8_cls,3,dd_20,0.44235729113152145
+jkx_cnn + swin_t + yolov8_cls,3,dd_40,0.4280278111191625
+resnet50 + effnet_b0 + convnext_t,3,dir_5,0.33017965261190096
+resnet50 + effnet_b0 + convnext_t,3,dir_10,0.29807022725093285
+resnet50 + effnet_b0 + convnext_t,3,dir_20,0.26709692857132045
+resnet50 + effnet_b0 + convnext_t,3,dir_40,0.3298747794764134
+resnet50 + effnet_b0 + convnext_t,3,vol_5,-0.08021459747911264
+resnet50 + effnet_b0 + convnext_t,3,vol_10,-0.11597360164830439
+resnet50 + effnet_b0 + convnext_t,3,vol_20,-0.17780231696863136
+resnet50 + effnet_b0 + convnext_t,3,vol_40,-0.26327177910922317
+resnet50 + effnet_b0 + convnext_t,3,dd_5,0.5207263456922703
+resnet50 + effnet_b0 + convnext_t,3,dd_10,0.5156501117165144
+resnet50 + effnet_b0 + convnext_t,3,dd_20,0.5117624915943046
+resnet50 + effnet_b0 + convnext_t,3,dd_40,0.4783148097408459
+resnet50 + effnet_b0 + vit_b16,3,dir_5,0.32950657616787066
+resnet50 + effnet_b0 + vit_b16,3,dir_10,0.2738558638319219
+resnet50 + effnet_b0 + vit_b16,3,dir_20,0.268909974537397
+resnet50 + effnet_b0 + vit_b16,3,dir_40,0.3391527039657882
+resnet50 + effnet_b0 + vit_b16,3,vol_5,-0.035292390192134926
+resnet50 + effnet_b0 + vit_b16,3,vol_10,-0.07007773189566646
+resnet50 + effnet_b0 + vit_b16,3,vol_20,-0.11736261911312984
+resnet50 + effnet_b0 + vit_b16,3,vol_40,-0.20661290394796628
+resnet50 + effnet_b0 + vit_b16,3,dd_5,0.5280852596845328
+resnet50 + effnet_b0 + vit_b16,3,dd_10,0.533515420985532
+resnet50 + effnet_b0 + vit_b16,3,dd_20,0.5276526495169597
+resnet50 + effnet_b0 + vit_b16,3,dd_40,0.5018403715831924
+resnet50 + effnet_b0 + swin_t,3,dir_5,0.31805734261787383
+resnet50 + effnet_b0 + swin_t,3,dir_10,0.26292937807973044
+resnet50 + effnet_b0 + swin_t,3,dir_20,0.23153427028940896
+resnet50 + effnet_b0 + swin_t,3,dir_40,0.3324937004067757
+resnet50 + effnet_b0 + swin_t,3,vol_5,-0.03700806902780429
+resnet50 + effnet_b0 + swin_t,3,vol_10,-0.07902990338624138
+resnet50 + effnet_b0 + swin_t,3,vol_20,-0.1409053562394098
+resnet50 + effnet_b0 + swin_t,3,vol_40,-0.22106123936993516
+resnet50 + effnet_b0 + swin_t,3,dd_5,0.5550105782954489
+resnet50 + effnet_b0 + swin_t,3,dd_10,0.5338500105463376
+resnet50 + effnet_b0 + swin_t,3,dd_20,0.523191626883189
+resnet50 + effnet_b0 + swin_t,3,dd_40,0.49239760132773
+resnet50 + effnet_b0 + yolov8_cls,3,dir_5,0.31625597301198655
+resnet50 + effnet_b0 + yolov8_cls,3,dir_10,0.22041257918586102
+resnet50 + effnet_b0 + yolov8_cls,3,dir_20,0.23180692659180266
+resnet50 + effnet_b0 + yolov8_cls,3,dir_40,0.3093227547245723
+resnet50 + effnet_b0 + yolov8_cls,3,vol_5,-0.08447644847397462
+resnet50 + effnet_b0 + yolov8_cls,3,vol_10,-0.10770424493099484
+resnet50 + effnet_b0 + yolov8_cls,3,vol_20,-0.13427018420568815
+resnet50 + effnet_b0 + yolov8_cls,3,vol_40,-0.2088396720451684
+resnet50 + effnet_b0 + yolov8_cls,3,dd_5,0.5185670884217
+resnet50 + effnet_b0 + yolov8_cls,3,dd_10,0.5048965805600198
+resnet50 + effnet_b0 + yolov8_cls,3,dd_20,0.4900802352341691
+resnet50 + effnet_b0 + yolov8_cls,3,dd_40,0.45993891059142045
+resnet50 + convnext_t + vit_b16,3,dir_5,0.3255660689311159
+resnet50 + convnext_t + vit_b16,3,dir_10,0.33726430793101253
+resnet50 + convnext_t + vit_b16,3,dir_20,0.35015375258920794
+resnet50 + convnext_t + vit_b16,3,dir_40,0.3265742723496174
+resnet50 + convnext_t + vit_b16,3,vol_5,-0.02607570109988755
+resnet50 + convnext_t + vit_b16,3,vol_10,-0.07334408245180568
+resnet50 + convnext_t + vit_b16,3,vol_20,-0.15545199382474362
+resnet50 + convnext_t + vit_b16,3,vol_40,-0.2381836383131739
+resnet50 + convnext_t + vit_b16,3,dd_5,0.5224117595766846
+resnet50 + convnext_t + vit_b16,3,dd_10,0.514502147532997
+resnet50 + convnext_t + vit_b16,3,dd_20,0.5005669928702996
+resnet50 + convnext_t + vit_b16,3,dd_40,0.4817008947633307
+resnet50 + convnext_t + swin_t,3,dir_5,0.3099203499394959
+resnet50 + convnext_t + swin_t,3,dir_10,0.33982089843041613
+resnet50 + convnext_t + swin_t,3,dir_20,0.3513178780198094
+resnet50 + convnext_t + swin_t,3,dir_40,0.3237726056687866
+resnet50 + convnext_t + swin_t,3,vol_5,-0.02673178167735224
+resnet50 + convnext_t + swin_t,3,vol_10,-0.0807280437011455
+resnet50 + convnext_t + swin_t,3,vol_20,-0.17720642032138545
+resnet50 + convnext_t + swin_t,3,vol_40,-0.2503690972892405
+resnet50 + convnext_t + swin_t,3,dd_5,0.5385958632210336
+resnet50 + convnext_t + swin_t,3,dd_10,0.5091251486286961
+resnet50 + convnext_t + swin_t,3,dd_20,0.48415395892590873
+resnet50 + convnext_t + swin_t,3,dd_40,0.452738164945377
+resnet50 + convnext_t + yolov8_cls,3,dir_5,0.31452877172954813
+resnet50 + convnext_t + yolov8_cls,3,dir_10,0.3263464274857921
+resnet50 + convnext_t + yolov8_cls,3,dir_20,0.3112871785883959
+resnet50 + convnext_t + yolov8_cls,3,dir_40,0.3065394598588102
+resnet50 + convnext_t + yolov8_cls,3,vol_5,-0.06993850642957788
+resnet50 + convnext_t + yolov8_cls,3,vol_10,-0.10610904290204926
+resnet50 + convnext_t + yolov8_cls,3,vol_20,-0.16742006768390993
+resnet50 + convnext_t + yolov8_cls,3,vol_40,-0.23680065222173385
+resnet50 + convnext_t + yolov8_cls,3,dd_5,0.509717805038114
+resnet50 + convnext_t + yolov8_cls,3,dd_10,0.48865848718853305
+resnet50 + convnext_t + yolov8_cls,3,dd_20,0.4624484694325059
+resnet50 + convnext_t + yolov8_cls,3,dd_40,0.4309855192311628
+resnet50 + vit_b16 + swin_t,3,dir_5,0.3156732812546362
+resnet50 + vit_b16 + swin_t,3,dir_10,0.33355715924860635
+resnet50 + vit_b16 + swin_t,3,dir_20,0.3392042583251788
+resnet50 + vit_b16 + swin_t,3,dir_40,0.31674910861576944
+resnet50 + vit_b16 + swin_t,3,vol_5,0.014546308704582622
+resnet50 + vit_b16 + swin_t,3,vol_10,-0.036628461705624504
+resnet50 + vit_b16 + swin_t,3,vol_20,-0.1171847559982131
+resnet50 + vit_b16 + swin_t,3,vol_40,-0.19498021096363316
+resnet50 + vit_b16 + swin_t,3,dd_5,0.5417177224310346
+resnet50 + vit_b16 + swin_t,3,dd_10,0.5280117260341477
+resnet50 + vit_b16 + swin_t,3,dd_20,0.5109349743756814
+resnet50 + vit_b16 + swin_t,3,dd_40,0.49578001057431315
+resnet50 + vit_b16 + yolov8_cls,3,dir_5,0.32071107163765483
+resnet50 + vit_b16 + yolov8_cls,3,dir_10,0.3247628676575826
+resnet50 + vit_b16 + yolov8_cls,3,dir_20,0.306880271611015
+resnet50 + vit_b16 + yolov8_cls,3,dir_40,0.30974650572022905
+resnet50 + vit_b16 + yolov8_cls,3,vol_5,-0.0244332197105388
+resnet50 + vit_b16 + yolov8_cls,3,vol_10,-0.059280011867991256
+resnet50 + vit_b16 + yolov8_cls,3,vol_20,-0.10614787243950818
+resnet50 + vit_b16 + yolov8_cls,3,vol_40,-0.17983027787532135
+resnet50 + vit_b16 + yolov8_cls,3,dd_5,0.5197293241364118
+resnet50 + vit_b16 + yolov8_cls,3,dd_10,0.5085094011733501
+resnet50 + vit_b16 + yolov8_cls,3,dd_20,0.4868576169174801
+resnet50 + vit_b16 + yolov8_cls,3,dd_40,0.46528189922770957
+resnet50 + swin_t + yolov8_cls,3,dir_5,0.3128155837409758
+resnet50 + swin_t + yolov8_cls,3,dir_10,0.32550248482430794
+resnet50 + swin_t + yolov8_cls,3,dir_20,0.29782546639710233
+resnet50 + swin_t + yolov8_cls,3,dir_40,0.3043076463666788
+resnet50 + swin_t + yolov8_cls,3,vol_5,-0.02634152076252927
+resnet50 + swin_t + yolov8_cls,3,vol_10,-0.06788188047347377
+resnet50 + swin_t + yolov8_cls,3,vol_20,-0.12892291263229905
+resnet50 + swin_t + yolov8_cls,3,vol_40,-0.19393306560603318
+resnet50 + swin_t + yolov8_cls,3,dd_5,0.5423246550007114
+resnet50 + swin_t + yolov8_cls,3,dd_10,0.49961034549055405
+resnet50 + swin_t + yolov8_cls,3,dd_20,0.4595482434707064
+resnet50 + swin_t + yolov8_cls,3,dd_40,0.4277579892989222
+effnet_b0 + convnext_t + vit_b16,3,dir_5,0.3253559146370914
+effnet_b0 + convnext_t + vit_b16,3,dir_10,0.289777606585919
+effnet_b0 + convnext_t + vit_b16,3,dir_20,0.2818547184138915
+effnet_b0 + convnext_t + vit_b16,3,dir_40,0.33562471533998234
+effnet_b0 + convnext_t + vit_b16,3,vol_5,-0.047188860062867155
+effnet_b0 + convnext_t + vit_b16,3,vol_10,-0.08044358232090953
+effnet_b0 + convnext_t + vit_b16,3,vol_20,-0.12181631684650829
+effnet_b0 + convnext_t + vit_b16,3,vol_40,-0.20971345730150404
+effnet_b0 + convnext_t + vit_b16,3,dd_5,0.5052811164805713
+effnet_b0 + convnext_t + vit_b16,3,dd_10,0.5064267328192694
+effnet_b0 + convnext_t + vit_b16,3,dd_20,0.5217374676824506
+effnet_b0 + convnext_t + vit_b16,3,dd_40,0.49623004475902904
+effnet_b0 + convnext_t + swin_t,3,dir_5,0.31659614949974973
+effnet_b0 + convnext_t + swin_t,3,dir_10,0.28247584837818923
+effnet_b0 + convnext_t + swin_t,3,dir_20,0.2670499546704584
+effnet_b0 + convnext_t + swin_t,3,dir_40,0.3336931618823968
+effnet_b0 + convnext_t + swin_t,3,vol_5,-0.04953175549044797
+effnet_b0 + convnext_t + swin_t,3,vol_10,-0.09020413675926497
+effnet_b0 + convnext_t + swin_t,3,vol_20,-0.14553166026855124
+effnet_b0 + convnext_t + swin_t,3,vol_40,-0.224027042527144
+effnet_b0 + convnext_t + swin_t,3,dd_5,0.5214101487386358
+effnet_b0 + convnext_t + swin_t,3,dd_10,0.4936703308190118
+effnet_b0 + convnext_t + swin_t,3,dd_20,0.5166162585988697
+effnet_b0 + convnext_t + swin_t,3,dd_40,0.4847001292084902
+effnet_b0 + convnext_t + yolov8_cls,3,dir_5,0.30319833572075094
+effnet_b0 + convnext_t + yolov8_cls,3,dir_10,0.2650432367930003
+effnet_b0 + convnext_t + yolov8_cls,3,dir_20,0.25513911375192455
+effnet_b0 + convnext_t + yolov8_cls,3,dir_40,0.3082517790885457
+effnet_b0 + convnext_t + yolov8_cls,3,vol_5,-0.09718923821635905
+effnet_b0 + convnext_t + yolov8_cls,3,vol_10,-0.11940704044132056
+effnet_b0 + convnext_t + yolov8_cls,3,vol_20,-0.14002532223450204
+effnet_b0 + convnext_t + yolov8_cls,3,vol_40,-0.21309229286058984
+effnet_b0 + convnext_t + yolov8_cls,3,dd_5,0.4686861802945401
+effnet_b0 + convnext_t + yolov8_cls,3,dd_10,0.47031345955339526
+effnet_b0 + convnext_t + yolov8_cls,3,dd_20,0.483633693368585
+effnet_b0 + convnext_t + yolov8_cls,3,dd_40,0.4579076966972259
+effnet_b0 + vit_b16 + swin_t,3,dir_5,0.29385740160795765
+effnet_b0 + vit_b16 + swin_t,3,dir_10,0.2621573486014999
+effnet_b0 + vit_b16 + swin_t,3,dir_20,0.2668403633067998
+effnet_b0 + vit_b16 + swin_t,3,dir_40,0.32829764726647226
+effnet_b0 + vit_b16 + swin_t,3,vol_5,-0.006292945073587797
+effnet_b0 + vit_b16 + swin_t,3,vol_10,-0.04467762886625737
+effnet_b0 + vit_b16 + swin_t,3,vol_20,-0.08592820233496079
+effnet_b0 + vit_b16 + swin_t,3,vol_40,-0.16827934421862567
+effnet_b0 + vit_b16 + swin_t,3,dd_5,0.5282252327913391
+effnet_b0 + vit_b16 + swin_t,3,dd_10,0.5222467059027759
+effnet_b0 + vit_b16 + swin_t,3,dd_20,0.5364466515050894
+effnet_b0 + vit_b16 + swin_t,3,dd_40,0.5100401335121284
+effnet_b0 + vit_b16 + yolov8_cls,3,dir_5,0.25941146092523554
+effnet_b0 + vit_b16 + yolov8_cls,3,dir_10,0.21899248452253736
+effnet_b0 + vit_b16 + yolov8_cls,3,dir_20,0.24378200130676908
+effnet_b0 + vit_b16 + yolov8_cls,3,dir_40,0.3220584977250736
+effnet_b0 + vit_b16 + yolov8_cls,3,vol_5,-0.049723231462394546
+effnet_b0 + vit_b16 + yolov8_cls,3,vol_10,-0.07115108350977617
+effnet_b0 + vit_b16 + yolov8_cls,3,vol_20,-0.07917133337968218
+effnet_b0 + vit_b16 + yolov8_cls,3,vol_40,-0.15576310653126701
+effnet_b0 + vit_b16 + yolov8_cls,3,dd_5,0.4962276100395137
+effnet_b0 + vit_b16 + yolov8_cls,3,dd_10,0.49773137078123164
+effnet_b0 + vit_b16 + yolov8_cls,3,dd_20,0.5050408067796893
+effnet_b0 + vit_b16 + yolov8_cls,3,dd_40,0.4822727262792743
+effnet_b0 + swin_t + yolov8_cls,3,dir_5,0.262122718048538
+effnet_b0 + swin_t + yolov8_cls,3,dir_10,0.20674352669406681
+effnet_b0 + swin_t + yolov8_cls,3,dir_20,0.22920553515911246
+effnet_b0 + swin_t + yolov8_cls,3,dir_40,0.3059907871238799
+effnet_b0 + swin_t + yolov8_cls,3,vol_5,-0.05331834736450114
+effnet_b0 + swin_t + yolov8_cls,3,vol_10,-0.0821295453042743
+effnet_b0 + swin_t + yolov8_cls,3,vol_20,-0.10390729049787417
+effnet_b0 + swin_t + yolov8_cls,3,vol_40,-0.171994020511552
+effnet_b0 + swin_t + yolov8_cls,3,dd_5,0.518271079720421
+effnet_b0 + swin_t + yolov8_cls,3,dd_10,0.4799544920865136
+effnet_b0 + swin_t + yolov8_cls,3,dd_20,0.48921434418868853
+effnet_b0 + swin_t + yolov8_cls,3,dd_40,0.4645970127664664
+convnext_t + vit_b16 + swin_t,3,dir_5,0.3281424811726374
+convnext_t + vit_b16 + swin_t,3,dir_10,0.333895455933861
+convnext_t + vit_b16 + swin_t,3,dir_20,0.34716933824480023
+convnext_t + vit_b16 + swin_t,3,dir_40,0.3159164804742724
+convnext_t + vit_b16 + swin_t,3,vol_5,0.001658543031409332
+convnext_t + vit_b16 + swin_t,3,vol_10,-0.047685787876597496
+convnext_t + vit_b16 + swin_t,3,vol_20,-0.12210539183823466
+convnext_t + vit_b16 + swin_t,3,vol_40,-0.19851390368538624
+convnext_t + vit_b16 + swin_t,3,dd_5,0.5223934024479231
+convnext_t + vit_b16 + swin_t,3,dd_10,0.5004157870274447
+convnext_t + vit_b16 + swin_t,3,dd_20,0.49942530625968484
+convnext_t + vit_b16 + swin_t,3,dd_40,0.4868738042551974
+convnext_t + vit_b16 + yolov8_cls,3,dir_5,0.3281561217242113
+convnext_t + vit_b16 + yolov8_cls,3,dir_10,0.3246563443797607
+convnext_t + vit_b16 + yolov8_cls,3,dir_20,0.31643700816527637
+convnext_t + vit_b16 + yolov8_cls,3,dir_40,0.313508805952956
+convnext_t + vit_b16 + yolov8_cls,3,vol_5,-0.037510088663452956
+convnext_t + vit_b16 + yolov8_cls,3,vol_10,-0.07086590017626637
+convnext_t + vit_b16 + yolov8_cls,3,vol_20,-0.1121973422792022
+convnext_t + vit_b16 + yolov8_cls,3,vol_40,-0.1846507882552877
+convnext_t + vit_b16 + yolov8_cls,3,dd_5,0.49768241249386186
+convnext_t + vit_b16 + yolov8_cls,3,dd_10,0.48440495323212585
+convnext_t + vit_b16 + yolov8_cls,3,dd_20,0.4790815655268335
+convnext_t + vit_b16 + yolov8_cls,3,dd_40,0.46256331523990596
+convnext_t + swin_t + yolov8_cls,3,dir_5,0.31872040664059603
+convnext_t + swin_t + yolov8_cls,3,dir_10,0.3287169295825489
+convnext_t + swin_t + yolov8_cls,3,dir_20,0.3108070319054825
+convnext_t + swin_t + yolov8_cls,3,dir_40,0.30004936301614776
+convnext_t + swin_t + yolov8_cls,3,vol_5,-0.0400456063073551
+convnext_t + swin_t + yolov8_cls,3,vol_10,-0.08027615172952962
+convnext_t + swin_t + yolov8_cls,3,vol_20,-0.13514498876775582
+convnext_t + swin_t + yolov8_cls,3,vol_40,-0.1986188257896706
+convnext_t + swin_t + yolov8_cls,3,dd_5,0.503516537478373
+convnext_t + swin_t + yolov8_cls,3,dd_10,0.4639445915954089
+convnext_t + swin_t + yolov8_cls,3,dd_20,0.448402865663413
+convnext_t + swin_t + yolov8_cls,3,dd_40,0.43017963020104905
+vit_b16 + swin_t + yolov8_cls,3,dir_5,0.3078002443693798
+vit_b16 + swin_t + yolov8_cls,3,dir_10,0.3147548395854421
+vit_b16 + swin_t + yolov8_cls,3,dir_20,0.30908367992796915
+vit_b16 + swin_t + yolov8_cls,3,dir_40,0.3049952544794316
+vit_b16 + swin_t + yolov8_cls,3,vol_5,0.0037762835415665608
+vit_b16 + swin_t + yolov8_cls,3,vol_10,-0.033816482555101945
+vit_b16 + swin_t + yolov8_cls,3,vol_20,-0.07470903344526536
+vit_b16 + swin_t + yolov8_cls,3,vol_40,-0.1425596282959969
+vit_b16 + swin_t + yolov8_cls,3,dd_5,0.5178155934630264
+vit_b16 + swin_t + yolov8_cls,3,dd_10,0.4929348870981892
+vit_b16 + swin_t + yolov8_cls,3,dd_20,0.4824830006557487
+vit_b16 + swin_t + yolov8_cls,3,dd_40,0.46872163070929956
+jkx_cnn,1,dir_5,0.2361330793357579
+jkx_cnn,1,dir_10,0.21862547039017632
+jkx_cnn,1,dir_20,0.2816130370910385
+jkx_cnn,1,dir_40,0.25823220323637125
+jkx_cnn,1,vol_5,-0.09888828620818435
+jkx_cnn,1,vol_10,-0.11056330303107553
+jkx_cnn,1,vol_20,-0.1348578402009757
+jkx_cnn,1,vol_40,-0.18977066136002363
+jkx_cnn,1,dd_5,0.4890149794170694
+jkx_cnn,1,dd_10,0.4777404611642783
+jkx_cnn,1,dd_20,0.4641704622819218
+jkx_cnn,1,dd_40,0.4528781424655237
+resnet50,1,dir_5,0.30160344865265554
+resnet50,1,dir_10,0.3189589618214998
+resnet50,1,dir_20,0.32961427737704585
+resnet50,1,dir_40,0.32334269098674895
+resnet50,1,vol_5,-0.06886989947226985
+resnet50,1,vol_10,-0.12802433229735022
+resnet50,1,vol_20,-0.24009335785131625
+resnet50,1,vol_40,-0.31755906280827184
+resnet50,1,dd_5,0.537464031500833
+resnet50,1,dd_10,0.526488106904398
+resnet50,1,dd_20,0.49607921297630536
+resnet50,1,dd_40,0.46842707191069416
+effnet_b0,1,dir_5,0.1694646594981065
+effnet_b0,1,dir_10,0.1747216374963473
+effnet_b0,1,dir_20,0.22139493828499313
+effnet_b0,1,dir_40,0.33340128344101233
+effnet_b0,1,vol_5,-0.13407087037345589
+effnet_b0,1,vol_10,-0.1430869726221662
+effnet_b0,1,vol_20,-0.1301670935484398
+effnet_b0,1,vol_40,-0.22139397866341937
+effnet_b0,1,dd_5,0.4772337183741091
+effnet_b0,1,dd_10,0.5162324935462014
+effnet_b0,1,dd_20,0.5371596998592437
+effnet_b0,1,dd_40,0.5050479331112105
+convnext_t,1,dir_5,0.33887783440566666
+convnext_t,1,dir_10,0.34942049396659036
+convnext_t,1,dir_20,0.3393050491289542
+convnext_t,1,dir_40,0.3177210392954777
+convnext_t,1,vol_5,-0.109528936164909
+convnext_t,1,vol_10,-0.1589151241902793
+convnext_t,1,vol_20,-0.24815319518981038
+convnext_t,1,vol_40,-0.32149821629291364
+convnext_t,1,dd_5,0.4911386697506643
+convnext_t,1,dd_10,0.4782134130748454
+convnext_t,1,dd_20,0.4744402903254101
+convnext_t,1,dd_40,0.45349328852993004
+vit_b16,1,dir_5,0.3342544070202436
+vit_b16,1,dir_10,0.3320751672983148
+vit_b16,1,dir_20,0.33826331926110725
+vit_b16,1,dir_40,0.31430232016426324
+vit_b16,1,vol_5,0.014103185487271297
+vit_b16,1,vol_10,-0.028617159272971593
+vit_b16,1,vol_20,-0.07865758062282291
+vit_b16,1,vol_40,-0.16643689208657042
+vit_b16,1,dd_5,0.514153919935383
+vit_b16,1,dd_10,0.515156160461127
+vit_b16,1,dd_20,0.516301828160437
+vit_b16,1,dd_40,0.506034829268157
+swin_t,1,dir_5,0.3020886906705724
+swin_t,1,dir_10,0.33708826717810547
+swin_t,1,dir_20,0.3322286152722212
+swin_t,1,dir_40,0.30242166190537967
+swin_t,1,vol_5,0.014165899123673387
+swin_t,1,vol_10,-0.04077716905357276
+swin_t,1,vol_20,-0.12287431793218029
+swin_t,1,vol_40,-0.18364061035626378
+swin_t,1,dd_5,0.5740532310841261
+swin_t,1,dd_10,0.5119665933089554
+swin_t,1,dd_20,0.501007769786276
+swin_t,1,dd_40,0.4787454715931071
+yolov8_cls,1,dir_5,0.28882881845419456
+yolov8_cls,1,dir_10,0.26891041933470416
+yolov8_cls,1,dir_20,0.2841958709105597
+yolov8_cls,1,dir_40,0.3009346488561323
+yolov8_cls,1,vol_5,-0.10622222933638348
+yolov8_cls,1,vol_10,-0.11912244213209955
+yolov8_cls,1,vol_20,-0.11614101888111317
+yolov8_cls,1,vol_40,-0.162391251718228
+yolov8_cls,1,dd_5,0.46685964598277185
+yolov8_cls,1,dd_10,0.4651212548835143
+yolov8_cls,1,dd_20,0.44291227586552556
+yolov8_cls,1,dd_40,0.42744882674200485

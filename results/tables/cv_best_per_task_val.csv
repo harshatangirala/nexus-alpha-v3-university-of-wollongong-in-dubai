@@ -1,0 +1,13 @@
+task,combo,size,primary
+dd_10,resnet50 + effnet_b0 + swin_t,3,0.5338500105463376
+dd_20,effnet_b0,1,0.5371596998592437
+dd_40,effnet_b0 + vit_b16,2,0.5101225901066789
+dd_5,swin_t,1,0.5740532310841261
+dir_10,convnext_t,1,0.34942049396659036
+dir_20,resnet50 + convnext_t + swin_t,3,0.3513178780198094
+dir_40,resnet50 + effnet_b0 + vit_b16,3,0.3391527039657882
+dir_5,convnext_t,1,0.33887783440566666
+vol_10,vit_b16 + swin_t,2,-0.014713095920268149
+vol_20,vit_b16 + yolov8_cls,2,-0.06720903477257933
+vol_40,jkx_cnn + vit_b16 + yolov8_cls,3,-0.1353810258403536
+vol_5,vit_b16 + swin_t,2,0.033992326545271956

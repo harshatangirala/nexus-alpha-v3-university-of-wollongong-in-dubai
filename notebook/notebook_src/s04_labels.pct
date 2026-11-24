@@ -1,0 +1,146 @@
+# %% [markdown]
+## 4. Decisions, targets, blocks and leakage control
+
+**Decision time.** The close of session *t* (after the last hourly bar). Every input (chart, numbers, filings) uses only information available at that moment.
+
+**Targets for each horizon h ∈ {5, 10, 20, 40} sessions** (defined before any data were seen):
+* **Direction (3 classes).** r = log(C<sub>t+h</sub> / C<sub>t</sub>). σ<sub>t</sub> = standard deviation of the last 60 daily log returns (known at *t*). **UP** if r > 0.5 σ<sub>t</sub> √h, **DOWN** if r < −0.5 σ<sub>t</sub> √h, else **SIDEWAYS**. Scaling by σ<sub>t</sub> makes "sideways" mean the same thing for a calm and a volatile stock; k = 0.5 gives roughly balanced classes for normal returns (38 % sideways).
+* **Volatility.** Log of annualised realised volatility over sessions t+1 … t+h, measured from **hourly** bars (overnight return² + hourly return²): much less noisy than h daily returns.
+* **Drawdown > 10 %.** 1 if the lowest low in sessions t+1 … t+h is more than 10 % below C<sub>t</sub>.
+
+**Rows.** Evaluation rows use every 5th session of a common calendar (so 5-session labels do not overlap within a stock). Training rows use every session in FULL mode (more chart variety; overlapping labels are fine for fitting, never for evaluation).
+
+**Blocks and purge.** A row belongs to the block of its decision date. A row is dropped if its 40-session label window reaches into the next block (purge = longest horizon), so no training label overlaps validation or test outcomes.
+
+**Locked test.** After the labels are built, every test-block label is moved into `VAULT` and replaced by NaN in the working table. Nothing before §23 can read them; the vault opens only after the freeze manifest (§22) exists, and each opening is logged.
+
+# %%
+K_SIDE, SIGW, DDT = CFG["k_sideways"], CFG["sigma_window"], CFG["dd_threshold"]
+BLK = {b: (pd.Timestamp(a), pd.Timestamp(z)) for b, (a, z) in CFG["blocks"].items()}
+BLOCK_ORDER = ["train", "inner", "val", "test"]
+CAL_POS = {d: i for i, d in enumerate(CAL)}
+G0 = int(np.searchsorted(CAL.values, np.datetime64(pd.Timestamp(CFG["decision_start"]))))
+HMAX = max(HORIZONS)
+
+def session_rv(d: pd.DataFrame, hb: pd.DataFrame) -> np.ndarray:
+    """Realised variance of each daily session: overnight log return^2 + sum of hourly log returns^2
+    (first hourly bar measured from the session open). Sessions without hourly bars use the daily close-to-close return^2."""
+    c = d["close"].values; o = d["open"].values
+    prev_c = np.r_[np.nan, c[:-1]]
+    on = np.log(o / prev_c) ** 2
+    hb = hb[["session", "open", "close"]].copy()
+    hb["prev"] = hb.groupby("session")["close"].shift(1)
+    hb["prev"] = hb["prev"].fillna(hb["open"])
+    hb["r2"] = np.log(hb["close"] / hb["prev"]) ** 2
+    intra = hb.groupby("session")["r2"].sum()
+    intra_v = intra.reindex(pd.DatetimeIndex(d["date"])).values
+    cc = np.log(c / prev_c) ** 2
+    return np.where(np.isfinite(intra_v), np.nan_to_num(on) + intra_v, cc)
+
+def build_stock_rows(t: str) -> pd.DataFrame:
+    d, hb = BARS_D[t], BARS_H[t]
+    pos = np.array([CAL_POS.get(x, -1) for x in d["date"]])
+    c, lo = d["close"].values, d["low"].values
+    lr = np.r_[np.nan, np.diff(np.log(c))]
+    sig = pd.Series(lr).rolling(SIGW, min_periods=SIGW).std().values
+    rvs = session_rv(d, hb); crv = np.r_[0.0, np.nancumsum(rvs)]
+    n = len(d); idx = np.arange(n)
+    keep = (pos >= G0) & (idx + HMAX < n) & np.isfinite(sig)
+    out = {"ticker": t, "sector": SECTOR_OF[t], "date": d["date"].values, "t_idx": idx, "g": pos, "sigma": sig, "close": c}
+    for h in HORIZONS:
+        j = np.minimum(idx + h, n - 1)
+        r = np.log(c[j] / c)
+        thr = K_SIDE * sig * np.sqrt(h)
+        out[f"ret_{h}"] = r
+        out[f"dir_{h}"] = np.where(r > thr, 2, np.where(r < -thr, 0, 1)).astype(float)
+        rv = (crv[np.minimum(idx + h + 1, n)] - crv[np.minimum(idx + 1, n)])
+        out[f"vol_{h}"] = 0.5 * np.log(np.maximum(rv, 1e-12) * 252.0 / h)
+        win = np.lib.stride_tricks.sliding_window_view(np.r_[lo, np.full(HMAX + 1, np.nan)], h)[1: n + 1]
+        out[f"dd_{h}"] = (np.nanmin(win, axis=1) / c - 1 <= DDT).astype(float)
+        for k in ("ret", "dir", "vol", "dd"):
+            out[f"{k}_{h}"] = np.where(idx + h < n, out[f"{k}_{h}"], np.nan)
+    df = pd.DataFrame(out)
+    return df[keep]
+
+P_ALL = pd.concat([build_stock_rows(t) for t in TICKERS], ignore_index=True)
+P_ALL["date"] = pd.to_datetime(P_ALL["date"])
+P_ALL["block"] = None
+for b in BLOCK_ORDER:
+    P_ALL.loc[(P_ALL.date >= BLK[b][0]) & (P_ALL.date <= BLK[b][1]), "block"] = b
+P_ALL = P_ALL.dropna(subset=["block"])
+# purge: the 40-session label window must end before the next block starts
+end_g = P_ALL["g"].values + HMAX
+for b, nxt in zip(BLOCK_ORDER[:-1], BLOCK_ORDER[1:]):
+    g_next = int(np.searchsorted(CAL.values, np.datetime64(BLK[nxt][0])))
+    P_ALL = P_ALL[~((P_ALL["block"] == b) & (P_ALL["g"] + HMAX >= g_next))]
+rel = P_ALL["g"].values - G0
+eval_row = rel % CFG["eval_stride"] == 0
+train_row = rel % CFG["train_stride"] == 0
+P = P_ALL[np.where(P_ALL["block"].values == "train", train_row, eval_row)].reset_index(drop=True)
+P["eval_stride_row"] = ((P["g"] - G0) % CFG["eval_stride"] == 0)
+P["month"] = P["date"].dt.to_period("M").astype(str)
+P["row"] = np.arange(len(P))
+N = len(P)
+TR = (P.block == "train").values; IN = (P.block == "inner").values; VA = (P.block == "val").values; TE = (P.block == "test").values
+TR_EVAL = TR & P["eval_stride_row"].values          # non-overlapping training rows (for diagnostics only)
+LABEL_COLS = [f"{k}_{h}" for k in ("ret", "dir", "vol", "dd") for h in HORIZONS]
+print(f"Panel rows: {N:,} (train {TR.sum():,}, inner {IN.sum():,}, val {VA.sum():,}, test {TE.sum():,}); stocks {P.ticker.nunique()}; "
+      f"last decision {P.date.max().date()}")
+assert TR.sum() and IN.sum() and VA.sum() and TE.sum(), "a block has no rows: check the calendar / data end printed in section 3"
+assert P.loc[TE, "date"].max() >= pd.Timestamp("2026-06-01"), "the test block stops early: the data do not reach 2026"
+
+# ---------------------------------------------------------------- lock the test labels (same cell as the build: a re-run always starts from fresh labels)
+VAULT.deposit("panel_labels", P.loc[TE, ["row", *LABEL_COLS]])
+P.loc[TE, LABEL_COLS] = np.nan
+Y = {k: P[k].values.copy() for k in LABEL_COLS}       # working labels (test = NaN)
+
+# %% [markdown]
+### 4.1 Leakage tests (must pass)
+
+# %%
+LEAK = {}
+for b, nxt in zip(BLOCK_ORDER[:-1], BLOCK_ORDER[1:]):
+    last_end = CAL[int(P.loc[P.block == b, "g"].max()) + HMAX]
+    LEAK[f"purge_{b}_before_{nxt}"] = bool(last_end < BLK[nxt][0])
+LEAK["test_labels_hidden"] = bool(np.isnan(P.loc[TE, LABEL_COLS].values).all())
+LEAK["unique_stock_dates"] = bool(not P.duplicated(["ticker", "date"]).any())
+LEAK["eval_rows_non_overlapping_5"] = bool(P.loc[~TR].groupby("ticker")["g"].diff().dropna().ge(CFG["eval_stride"]).all())
+# labels depend only on bars after t: changing bars up to t (except the anchor close) must not change the volatility/drawdown windows
+_t = TICKERS[0]; _d = BARS_D[_t].copy(); _keep = BARS_D[_t]
+_i = int(P.loc[P.ticker == _t, "t_idx"].iloc[len(P.loc[P.ticker == _t]) // 2])
+_d.loc[: _i - 1, ["open", "high", "low"]] *= 1.5
+BARS_D[_t] = _d; _rows = build_stock_rows(_t); BARS_D[_t] = _keep
+_r0 = build_stock_rows(_t)
+LEAK["labels_ignore_past_bars"] = bool(np.allclose(_rows.loc[_rows.t_idx == _i, [f"dd_{h}" for h in HORIZONS]].values,
+                                                   _r0.loc[_r0.t_idx == _i, [f"dd_{h}" for h in HORIZONS]].values, equal_nan=True))
+print(LEAK)
+assert all(LEAK.values()), f"leakage test failed: {LEAK}"
+pd.Series(LEAK).rename_axis("check").rename("passed").to_csv(SUB["tables"] / "leakage_tests.csv")
+
+# %% [markdown]
+### 4.2 Label analysis (class balance and base rates, development blocks only)
+
+# %%
+dev = ~TE
+rows = []
+for h in HORIZONS:
+    for b in ["train", "inner", "val"]:
+        m = (P.block == b).values & P["eval_stride_row"].values
+        y = Y[f"dir_{h}"][m]
+        rows.append({"horizon": h, "block": b, "n": int(m.sum()), **{f"share_{c}": float(np.mean(y == k)) for k, c in enumerate(CLASSES)},
+                     "dd_rate": float(np.nanmean(Y[f"dd_{h}"][m])), "mean_vol": float(np.exp(np.nanmean(Y[f"vol_{h}"][m])))})
+LABEL_BAL = pd.DataFrame(rows); LABEL_BAL.to_csv(SUB["tables"] / "label_balance.csv", index=False); display(LABEL_BAL.round(3))
+fig, ax = plt.subplots(1, 3, figsize=(15, 3.6))
+tr_lb = LABEL_BAL[LABEL_BAL.block == "train"].set_index("horizon")
+tr_lb[[f"share_{c}" for c in CLASSES]].plot.bar(stacked=True, ax=ax[0], color=["#dc2626", "#9ca3af", "#16a34a"]); ax[0].set_title("Direction classes (train)")
+LABEL_BAL.pivot(index="horizon", columns="block", values="dd_rate").plot.bar(ax=ax[1]); ax[1].set_title("Drawdown > 10 % base rate")
+for h in HORIZONS:
+    ax[2].hist(Y[f"vol_{h}"][TR & np.isfinite(Y[f"vol_{h}"])], bins=60, histtype="step", label=f"{h}d", density=True)
+ax[2].legend(); ax[2].set_title("log annualised realised volatility (train)")
+plt.tight_layout(); savefig(fig, "eda_labels.png"); plt.show()
+sec_bal = pd.DataFrame([{"sector": s, "horizon": h, "dd_rate": float(np.nanmean(Y[f"dd_{h}"][dev & (P.sector == s).values])),
+                         "share_UP": float(np.nanmean(Y[f"dir_{h}"][dev & (P.sector == s).values] == 2))}
+                        for s in SECTORS for h in HORIZONS])
+sec_bal.to_csv(SUB["tables"] / "label_balance_by_sector.csv", index=False)
+display(sec_bal.pivot(index="sector", columns="horizon", values="dd_rate").round(3))
+tick("4 labels")

@@ -1,0 +1,523 @@
+# %% [markdown]
+## 24. The Streamlit dashboard (product)
+
+**What it does.** Up to 4 stocks side by side. For each: upload the **1-week, 1-day and 1-hour chart screenshots** (any TradingView-style chart), optionally type the ticker, and paste a **recent 10-K / 10-Q / 8-K summary** with its report type. Press *Analyse*. For 5, 10, 20 and 40 sessions it shows P(UP / SIDEWAYS / DOWN), the expected volatility and the probability of a >10 % drawdown, then a **20-day Monte Carlo** fan chart of price paths.
+
+**How the screenshots are used (and why).** The models were trained on charts drawn in one exact format (§6). A screenshot from a broker has different colours, fonts, indicators, zoom and aspect ratio, which §12.7 shows can move predictions. So the dashboard *reads* each screenshot (OCR, TriFrame's tested reader: ticker candidates, timeframe and the last bar's O/H/L/C legend), confirms the ticker and the as-of date against market data, then **redraws the three charts in the training format** from Yahoo bars (daily 3 years, hourly 60 days) and feeds those to the models. Both the screenshots and the redrawn model inputs are displayed, so the user can see what the model saw.
+
+**What it runs.** Exactly the frozen `deploy_recipe` (§20) whose test-block results are shown in the app: the top-3 CV ensemble per task; when text is supplied, blended with the top-3 deployable NLP models using the validation-chosen weights. **No-call rule:** a direction call (UP / SIDEWAYS / DOWN) is printed only for horizons where the recipe's direction skill was significant on the locked test block; elsewhere the probabilities are shown with "no validated direction skill". Volatility and drawdown are always shown with their test scores.
+
+# %%
+SCREEN_SRC = r'''
+"""Reads ticker candidates, timeframe and the last-bar O/H/L/C legend from a TradingView-style chart screenshot.
+From TriFrame (tested on 66 real TradingView dark-theme screenshots: timeframe 100 %, legend O/H/L/C 100 %,
+true ticker among the candidates 66/66). The app confirms a candidate by matching the legend against market data."""
+import re
+import numpy as np
+from PIL import Image
+
+_OCR = None
+TF_MAP = {"1W": "1W", "W": "1W", "1D": "1D", "D": "1D", "1H": "1H", "60": "1H"}
+STOP = {"USD", "SELL", "BUY", "VOL", "SMA", "EMA", "NASDAQ", "NYSE", "AMEX", "ARCA", "BATS", "OTC", "TRADE", "SAVE", "ALERT",
+        "PRE", "POST", "MACD", "RSI", "LOG", "AUTO", "INC", "CORP", "LTD", "CO", "PLC", "THE", "AND", "OF", "CLOSE", "OPEN",
+        "HIGH", "LOW", "ADJ", "EXT", "UTC"}
+
+
+def _ocr():
+    global _OCR
+    if _OCR is None:
+        try:
+            from rapidocr_onnxruntime import RapidOCR
+            _OCR = RapidOCR()
+        except ImportError:
+            from rapidocr import RapidOCR
+            _new = RapidOCR()
+            def _OCR(arr):
+                r = _new(arr)
+                if r is None or getattr(r, "boxes", None) is None:
+                    return [], 0.0
+                return [[b.tolist() if hasattr(b, "tolist") else b, t, s] for b, t, s in zip(r.boxes, r.txts, r.scores)], 0.0
+    return _OCR
+
+
+def _num(s):
+    try:
+        return float(s.replace(",", ""))
+    except Exception:
+        return None
+
+
+def _rows(items):
+    boxes = []
+    for box, text, _ in items:
+        ys = [p[1] for p in box]; xs = [p[0] for p in box]
+        boxes.append((sum(ys) / 4, max(ys) - min(ys), min(xs), text.strip()))
+    boxes.sort()
+    rows, cur = [], []
+    for b in boxes:
+        if cur and abs(b[0] - cur[-1][0]) > 0.6 * max(b[1], cur[-1][1], 1):
+            rows.append(sorted(cur, key=lambda z: z[2])); cur = []
+        cur.append(b)
+    if cur:
+        rows.append(sorted(cur, key=lambda z: z[2]))
+    return [[z[3] for z in r if z[3]] for r in rows]
+
+
+def _toolbar_candidates(rows):
+    out = []
+    for r in rows[:3]:
+        for j, t in enumerate(r):
+            if re.search(r"[OHLC0][\d,]+\.\d", t) or "·" in t:
+                continue
+            for tok in re.findall(r"[A-Za-z][A-Za-z\.\-]{0,5}", t):
+                up = tok.upper().strip(".-")
+                if not (1 <= len(up) <= 5) or up in STOP or up in TF_MAP:
+                    continue
+                if sum(c.islower() for c in tok) > 1:
+                    continue
+                if len(up) == 1 and j == 0 and len(r) > 1:
+                    continue
+                up = up.replace(".", "-")
+                if up not in out:
+                    out.append(up)
+    return out
+
+
+def _price_tag_candidates(img):
+    w, h = img.size
+    right = img.crop((int(w * 0.72), 0, w, h))
+    if right.size[0] < 800:
+        right = right.resize((right.size[0] * 2, right.size[1] * 2), Image.LANCZOS)
+    res, _ = _ocr()(np.asarray(right))
+    out = []
+    for box, text, _ in sorted(res or [], key=lambda r: min(p[1] for p in r[0])):
+        tok = text.strip()
+        if re.fullmatch(r"[A-Z][A-Z\.\-]{0,5}", tok) and tok not in STOP and tok.replace(".", "-") not in out:
+            out.append(tok.replace(".", "-"))
+    return out
+
+
+def read_header(img, deep=False):
+    if not isinstance(img, Image.Image):
+        img = Image.open(img)
+    img = img.convert("RGB")
+    w, h = img.size
+    top = img.crop((0, 0, int(w * 0.75), max(60, int(h * 0.12))))
+    if top.size[0] < 1600:
+        top = top.resize((top.size[0] * 2, top.size[1] * 2), Image.LANCZOS)
+    res, _ = _ocr()(np.asarray(top))
+    rows = _rows(res or [])
+    joined = " | ".join(" ".join(r) for r in rows)
+    tf = None
+    m = re.search(r"[·•]\s*(1W|1D|1H|60)\s*[·•]", joined, re.I)
+    if m:
+        tf = TF_MAP.get(m.group(1).upper())
+    if tf is None and rows:
+        for t in rows[0]:
+            if t.strip().upper() in TF_MAP:
+                tf = TF_MAP[t.strip().upper()]; break
+    ohlc = None
+    flat = re.sub(r"\s+", "", joined)
+    m = re.search(r"[O0]([\d,]*\d\.\d+)H([\d,]+\.\d+)L([\d,]+\.\d+)C([\d,]+\.\d+)", flat)
+    if m:
+        vals = [_num(x) for x in m.groups()]
+        if all(v is not None for v in vals) and vals[1] >= max(vals[0], vals[3]) * 0.999 and vals[2] <= min(vals[0], vals[3]) * 1.001:
+            ohlc = dict(zip(("open", "high", "low", "close"), vals))
+    name = None
+    m = re.search(r"([A-Za-z][^|·•]{2,80}?)\s*[·•]\s*(?:1W|1D|1H|60)\b", joined, re.I)
+    if m:
+        name = re.sub(r"^[^A-Za-z]+", "", m.group(1)).strip()
+    cands = _toolbar_candidates(rows)
+    if deep or not cands:
+        cands += [c for c in _price_tag_candidates(img) if c not in cands]
+    return dict(candidates=cands, timeframe=tf, ohlc=ohlc, name=name, header_text=joined[:300])
+'''
+
+ENGINE_SRC = r'''
+"""NEXUS Alpha v3 dashboard engine: loads the frozen bundle and reproduces the notebook's deploy_recipe chain exactly."""
+import os
+import json
+import math
+import numpy as np
+import pandas as pd
+import torch
+from nav3_core import (PALETTE_DARK, HORIZONS, CLASSES, ChartNet, TextNet, prepare_arrays, render_views, trailing_sigma,
+                       chart_raw_outputs, text_raw_outputs, apply_calibration, raw_from_probs, blend, text_input, mc_simulate)
+
+DEV = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+NY = "America/New_York"
+_CACHE = {}
+
+
+def load_bundle(path):
+    with open(os.path.join(path, "bundle.json")) as f:
+        B = json.load(f)
+    B["dir"] = path
+    return B
+
+
+def _cv_model(B, mid):
+    if ("cv", mid) not in _CACHE:
+        ck = torch.load(B["cv_models"][mid]["path"], map_location="cpu", weights_only=False)
+        net = ChartNet(ck["spec"], pretrained=False)
+        net.load_state_dict(ck["state_dict"])
+        _CACHE[("cv", mid)] = (net.to(DEV).eval(), np.asarray(ck["vol_mu"]), np.asarray(ck["vol_sd"]))
+    return _CACHE[("cv", mid)]
+
+
+def _nlp_model(B, mid):
+    if ("nlp", mid) not in _CACHE:
+        spec = B["nlp_models"][mid]
+        if spec["kind"] == "tfidf":
+            import joblib
+            _CACHE[("nlp", mid)] = joblib.load(spec["path"])
+        else:
+            from transformers import AutoTokenizer
+            ck = torch.load(spec["path"], map_location="cpu", weights_only=False)
+            net = TextNet(ck["hf"], from_config=True)
+            net.load_state_dict({k: (v.float() if v.is_floating_point() else v) for k, v in ck["state_dict"].items()})
+            _CACHE[("nlp", mid)] = (net.to(DEV).eval(), AutoTokenizer.from_pretrained(ck["hf"]), int(ck["max_len"]),
+                                    np.asarray(ck["vol_mu"]), np.asarray(ck["vol_sd"]), bool(ck.get("amp", True)))
+    return _CACHE[("nlp", mid)]
+
+
+def cv_chain(B, img_idx):
+    """img_idx: (n, 3, 224, 224) uint8 palette indices -> calibrated cv_top3 predictions."""
+    pal = torch.tensor(PALETTE_DARK, dtype=torch.float32, device=DEV)
+    cal = {}
+    for mid in B["cv_union"]:
+        net, mu, sd = _cv_model(B, mid)
+        cal[mid] = apply_calibration(chart_raw_outputs(net, img_idx, pal, mu, sd, DEV), B["cal"][mid])
+    avg = {t: np.mean([cal[m][t] for m in B["cv_members"][t]], axis=0) for t in B["tasks"]}
+    return apply_calibration(raw_from_probs(avg), B["cal"]["cv_top3"])
+
+
+def nlp_raw(B, mid, texts):
+    spec = B["nlp_models"][mid]
+    obj = _nlp_model(B, mid)
+    if spec["kind"] == "tfidf":
+        X = obj["vectorizer"].transform(texts)
+        raw = {}
+        for t in B["tasks"]:
+            m = obj["models"][t]
+            kd = t.split("_")[0]
+            if kd == "vol":
+                raw[t] = m.predict(X)
+            elif kd == "dir":
+                raw[t] = np.log(np.clip(m.predict_proba(X), 1e-9, 1))
+            else:
+                q = np.clip(m.predict_proba(X)[:, 1], 1e-6, 1 - 1e-6)
+                raw[t] = np.log(q / (1 - q))
+        return raw
+    net, tok, L, mu, sd, amp = obj
+    return text_raw_outputs(net, tok, [x[: L * 8] for x in texts], L, mu, sd, DEV, batch=4, use_amp=amp)
+
+
+def nlp_chain(B, texts):
+    tr = {}
+    for mid in B["nlp_union"]:
+        ev = apply_calibration(nlp_raw(B, mid, texts), B["cal_event"][mid])
+        tr[mid] = apply_calibration(raw_from_probs(ev), B["cal"][B["nlp_models"][mid]["transfer_id"]])
+    avg = {t: np.mean([tr[m][t] for m in B["nlp_members"][t]], axis=0) for t in B["tasks"]}
+    return apply_calibration(raw_from_probs(avg), B["cal"]["nlp_deploy_top3"])
+
+
+def final_chain(B, cv, nlp=None):
+    mix = cv if nlp is None else blend(cv, nlp, B["w_fresh"])
+    return apply_calibration(raw_from_probs(mix), B["cal"]["deploy_recipe"])
+
+
+def fetch_market(ticker, asof=None):
+    """Yahoo daily (3 years) and hourly (60 days) bars, split-adjusted and not dividend-adjusted (as in training);
+    today's unfinished session is dropped; asof (date) truncates both."""
+    import yfinance as yf
+    tk = yf.Ticker(ticker.upper().replace(".", "-"))
+    d = tk.history(period="3y", interval="1d", auto_adjust=False, actions=False)
+    h = tk.history(period="60d", interval="60m", auto_adjust=False, actions=False, prepost=False)
+    if d is None or d.empty or h is None or h.empty:
+        raise ValueError(f"Yahoo returned no data for {ticker}")
+    di = pd.DatetimeIndex(d.index)
+    di = di.tz_convert(NY).tz_localize(None) if di.tz is not None else di
+    D = pd.DataFrame({"date": di.normalize(), "open": d["Open"].values, "high": d["High"].values, "low": d["Low"].values,
+                      "close": d["Close"].values, "volume": d["Volume"].values.astype(float)}).dropna().reset_index(drop=True)
+    hi = pd.DatetimeIndex(h.index)
+    hi = hi.tz_localize(NY) if hi.tz is None else hi.tz_convert(NY)
+    Hh = pd.DataFrame({"timestamp": hi.tz_convert("UTC"), "session": hi.tz_localize(None).normalize(), "minute": hi.minute,
+                       "open": h["Open"].values, "high": h["High"].values, "low": h["Low"].values, "close": h["Close"].values,
+                       "volume": h["Volume"].values.astype(float)}).dropna()
+    Hh = Hh[Hh["minute"] == 30].drop(columns="minute").reset_index(drop=True)
+    now = pd.Timestamp.now(tz=NY)
+    if len(D) and D["date"].iloc[-1] == now.tz_localize(None).normalize() and now.hour * 60 + now.minute < 16 * 60 + 15:
+        D = D.iloc[:-1]
+    if asof is not None:
+        D = D[D["date"] <= pd.Timestamp(asof)]
+    Hh = Hh[Hh["session"].isin(set(D["date"]))].reset_index(drop=True)
+    return D.reset_index(drop=True), Hh
+
+
+def match_legend(D, ohlc, tol=0.006):
+    """Session whose daily O/H/L/C matches a screenshot legend (pins the as-of date), else None."""
+    if not ohlc:
+        return None
+    x = D.tail(400)
+    err = np.max(np.abs(x[["open", "high", "low", "close"]].values / np.array([ohlc["open"], ohlc["high"], ohlc["low"], ohlc["close"]]) - 1), axis=1)
+    k = int(np.argmin(err))
+    return x["date"].iloc[k] if err[k] < tol else None
+
+
+def analyse(B, ticker, screenshots, form, text, n_paths=4000, seed=7):
+    """screenshots: dict '1W'/'1D'/'1H' -> PIL image or None. Returns everything the page shows."""
+    info, how = {}, "typed by the user"
+    if any(v is not None for v in screenshots.values()):
+        try:
+            import screen_reader
+            for slot, im in screenshots.items():
+                if im is not None:
+                    info[slot] = screen_reader.read_header(im)
+        except Exception as e:
+            info["error"] = f"{type(e).__name__}: {e}"
+    cands = [c for s in ("1D", "1W", "1H") for c in (info.get(s) or {}).get("candidates", [])]
+    legend = (info.get("1D") or {}).get("ohlc")
+    tk = (ticker or "").strip().upper()
+    D = Hh = None
+    if not tk:
+        for c in cands[:6]:
+            try:
+                D_, H_ = fetch_market(c)
+            except Exception:
+                continue
+            if legend is None or match_legend(D_, legend) is not None:
+                tk, D, Hh, how = c, D_, H_, ("read from the screenshot and confirmed by its price legend" if legend else "read from the screenshot (unconfirmed)")
+                break
+        if not tk:
+            raise ValueError("Could not identify the ticker from the screenshots: type it in the ticker box.")
+    if D is None:
+        D, Hh = fetch_market(tk)
+    asof = match_legend(D, legend)
+    if asof is not None:
+        D, Hh = fetch_market(tk, asof)
+        how += f"; as-of date pinned by the daily screenshot's legend ({pd.Timestamp(asof).date()})"
+    if len(D) < 300 or len(Hh) < 70:
+        raise ValueError(f"Not enough history for {tk} (daily {len(D)}, hourly {len(Hh)} bars).")
+    S = prepare_arrays(D, Hh)
+    img = render_views(S, len(D) - 1)[None]
+    cv = cv_chain(B, img)
+    nlp = nlp_chain(B, [text_input(form, "summary", text)]) if (text or "").strip() and B["nlp_union"] else None
+    fin = final_chain(B, cv, nlp)
+    p0 = float(D["close"].iloc[-1]); sig = trailing_sigma(D["close"].values, 60)
+    sim = mc_simulate(p0, sig, math.exp(float(fin["vol_20"][0])) * float(B.get("mc_scale", 1.0)), fin["dir_20"][0], nu=B["mc_nu"], n_days=20, n_paths=n_paths, seed=seed)
+    rows = []
+    for h in HORIZONS:
+        p = fin[f"dir_{h}"][0]; k = int(np.argmax(p)); thr = B["k_sideways"] * sig * math.sqrt(h)
+        call = CLASSES[k] if not B["no_call"].get(f"dir_{h}", True) else "NO CALL"
+        rows.append({"horizon (sessions)": h, "P(UP)": float(p[2]), "P(SIDEWAYS)": float(p[1]), "P(DOWN)": float(p[0]), "call": call,
+                     "sideways band": f"+/-{100 * (math.exp(thr) - 1):.1f}%", "expected vol (ann.)": float(math.exp(fin[f"vol_{h}"][0])),
+                     "P(drawdown > 10%)": float(fin[f"dd_{h}"][0]),
+                     "CV only P(UP)": float(cv[f"dir_{h}"][0][2]), "text only P(UP)": (float(nlp[f"dir_{h}"][0][2]) if nlp is not None else None)})
+    return {"ticker": tk, "asof": str(pd.Timestamp(D["date"].iloc[-1]).date()), "how": how, "p0": p0, "sigma": sig, "img": img[0],
+            "table": pd.DataFrame(rows), "sim": sim, "used_text": nlp is not None, "in_universe": tk.replace("-", ".") in B["universe"],
+            "ocr": {k: {kk: v for kk, v in (vv or {}).items() if kk != "header_text"} if isinstance(vv, dict) else vv for k, vv in info.items()}}
+'''
+
+APP_SRC = r'''
+import os
+import sys
+import numpy as np
+import pandas as pd
+import streamlit as st
+import plotly.graph_objects as go
+from PIL import Image
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import nav3_engine as E
+from nav3_core import PALETTE_DARK
+
+st.set_page_config(page_title="NEXUS Alpha v3", page_icon="📈", layout="wide")
+
+
+@st.cache_resource
+def bundle():
+    return E.load_bundle(os.environ.get("NAV3_BUNDLE", os.path.dirname(os.path.abspath(__file__))))
+
+
+B = bundle()
+st.title("NEXUS Alpha v3: charts + SEC filings → direction, volatility, drawdown")
+st.caption(f"{B['stamp']} · models frozen {B['frozen_utc']} · trained on {len(B['universe'])} US stocks (2016-2021), chosen on 2022-2023, "
+           "scored once on 2024-2026. Educational research, not financial advice.")
+with st.expander("What the research found on the locked test block (read before using the numbers)"):
+    for k, v in B["answers"].items():
+        st.markdown(f"**{k}.** {v}")
+    if B.get("deploy_skill"):
+        st.dataframe(pd.DataFrame(B["deploy_skill"])[["task", "skill", "lo", "hi", "p_holm", "supported"]], hide_index=True)
+    st.markdown("Direction calls are shown only where the recipe's direction skill was significant on the test block; "
+                "otherwise the probabilities are shown as 'NO CALL'.")
+
+n = st.radio("How many stocks?", [1, 2, 3, 4], horizontal=True)
+inputs = []
+for i, tab in enumerate(st.tabs([f"Stock {i + 1}" for i in range(n)])):
+    with tab:
+        ups = {}
+        for col, slot in zip(st.columns(3), ["1W", "1D", "1H"]):
+            with col:
+                up = st.file_uploader(f"{slot} chart screenshot", type=["png", "jpg", "jpeg"], key=f"up_{i}_{slot}")
+                if up is not None:
+                    st.image(up, width="stretch")
+                ups[slot] = up
+        c1, c2 = st.columns([1, 3])
+        tk = c1.text_input("Ticker (optional if the screenshot shows it)", key=f"tk_{i}")
+        form = c1.selectbox("Report type of the text", ["8-K", "10-Q", "10-K"], key=f"form_{i}")
+        txt = c2.text_area("Recent 10-K / 10-Q / 8-K summary (optional)", height=140, key=f"txt_{i}")
+        inputs.append((ups, tk, form, txt))
+with st.expander("Monte Carlo settings"):
+    a1, a2, a3 = st.columns(3)
+    n_paths = a1.select_slider("Simulated paths", [1000, 2000, 4000, 8000, 16000], value=4000)
+    n_show = a2.slider("Paths drawn", 0, 100, 40, step=10)
+    seed = int(a3.number_input("Random seed", 0, 10000, 7))
+
+if st.button("Analyse", type="primary"):
+    res = []
+    bar = st.progress(0.0, text="Starting...")
+    for j, (ups, tk, form, txt) in enumerate(inputs):
+        bar.progress(j / len(inputs), text=f"Stock {j + 1}: reading screenshots, rebuilding charts, predicting...")
+        if not tk.strip() and not any(u is not None for u in ups.values()):
+            continue
+        shots = {k: (Image.open(u).convert("RGB") if u is not None else None) for k, u in ups.items()}
+        try:
+            r = E.analyse(B, tk, shots, form, txt, n_paths=n_paths, seed=seed); r["slot"] = j + 1; r["shots"] = shots; res.append(r)
+        except Exception as e:
+            res.append({"slot": j + 1, "error": f"{type(e).__name__}: {e}"})
+    bar.empty()
+    st.session_state["res"] = res
+
+def fan(r, n_show):
+    sim = r["sim"]; x = list(range(0, 21)); q = sim["quantiles"]; p0 = r["p0"]
+    fig = go.Figure()
+    for k in range(min(n_show, sim["paths"].shape[0])):
+        fig.add_trace(go.Scatter(x=x, y=[p0] + list(sim["paths"][k]), mode="lines", line=dict(width=0.6, color="rgba(150,150,150,0.35)"), showlegend=False, hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=x, y=[p0] + list(q[4]), line=dict(width=0), showlegend=False))
+    fig.add_trace(go.Scatter(x=x, y=[p0] + list(q[0]), fill="tonexty", fillcolor="rgba(37,99,235,0.15)", line=dict(width=0), name="5-95 %"))
+    fig.add_trace(go.Scatter(x=x, y=[p0] + list(q[3]), line=dict(width=0), showlegend=False))
+    fig.add_trace(go.Scatter(x=x, y=[p0] + list(q[1]), fill="tonexty", fillcolor="rgba(37,99,235,0.3)", line=dict(width=0), name="25-75 %"))
+    fig.add_trace(go.Scatter(x=x, y=[p0] + list(q[2]), line=dict(color="#2563eb", width=2), name="median"))
+    fig.add_hline(y=p0 * 0.9, line_dash="dot", line_color="#dc2626", annotation_text="-10 %")
+    fig.update_layout(height=340, margin=dict(l=10, r=10, t=30, b=10), xaxis_title="sessions ahead", yaxis_title="price",
+                      title=f"{r['ticker']}: 20-session Monte Carlo ({sim['paths'].shape[0]:,} paths)")
+    return fig
+
+ok = [r for r in st.session_state.get("res", []) if "error" not in r]
+for r in st.session_state.get("res", []):
+    if "error" in r:
+        st.error(f"Stock {r['slot']}: {r['error']}")
+for r in ok:
+    st.markdown(f"### {r['ticker']} — as of {r['asof']} (last close ${r['p0']:,.2f})")
+    st.caption(f"Ticker {r['how']}. Text used: {'yes' if r['used_text'] else 'no'}." + ("" if r["in_universe"] else
+               " Note: this stock is outside the 50 training stocks; treat the output as an out-of-sample extrapolation."))
+    cA, cB = st.columns([1, 1])
+    with cA:
+        st.markdown("**Your screenshots**")
+        cc = st.columns(3)
+        for c_, k in zip(cc, ["1W", "1D", "1H"]):
+            if r["shots"].get(k) is not None:
+                c_.image(r["shots"][k], caption=k, width="stretch")
+    with cB:
+        st.markdown("**What the models saw (redrawn in the training format)**")
+        cc = st.columns(3)
+        for c_, j, k in zip(cc, range(3), ["weekly 52", "daily 63", "hourly 70"]):
+            c_.image(PALETTE_DARK[r["img"][j]], caption=k, width="stretch")
+    t = r["table"].copy()
+    for c in ["P(UP)", "P(SIDEWAYS)", "P(DOWN)", "P(drawdown > 10%)", "CV only P(UP)", "text only P(UP)"]:
+        t[c] = t[c].map(lambda v: "-" if v is None or (isinstance(v, float) and np.isnan(v)) else f"{100 * v:.0f}%")
+    t["expected vol (ann.)"] = t["expected vol (ann.)"].map(lambda v: f"{100 * v:.0f}%")
+    st.dataframe(t, hide_index=True, width="stretch")
+    sim = r["sim"]
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Simulated P(UP, 20 d)", f"{100 * sim['sim_dir'][2]:.0f}%"); c2.metric("Simulated P(DOWN, 20 d)", f"{100 * sim['sim_dir'][0]:.0f}%")
+    c3.metric("Simulated P(drawdown > 10 %)", f"{100 * sim['p_dd']:.0f}%"); c4.metric("Median price in 20 d", f"${sim['quantiles'][2][-1]:,.2f}")
+    st.plotly_chart(fan(r, n_show), width="stretch")
+    st.markdown("---")
+if len(ok) > 1:
+    st.subheader("Comparison")
+    st.dataframe(pd.DataFrame([{"stock": r["ticker"], "as of": r["asof"], "20d call": r["table"].iloc[2]["call"],
+                                "P(UP) 20d": f"{100 * r['table'].iloc[2]['P(UP)']:.0f}%", "vol 20d": f"{100 * r['table'].iloc[2]['expected vol (ann.)']:.0f}%",
+                                "P(DD>10%) 20d": f"{100 * r['table'].iloc[2]['P(drawdown > 10%)']:.0f}%",
+                                "MC 5-95 % (20d)": f"${r['sim']['quantiles'][0][-1]:,.0f} - ${r['sim']['quantiles'][4][-1]:,.0f}"} for r in ok]), hide_index=True)
+'''
+
+# %%
+APP_DIR = SUB["app"]; (APP_DIR / ".streamlit").mkdir(parents=True, exist_ok=True)
+CV_UNION = sorted({m for t in TASKS for m in TOP3_CV.get(t, [])})
+NLP_UNION = sorted({m for t in TASKS for m in NLP_DEPLOY_TOP3.get(t, [])})
+for m in CV_UNION + ["cv_top3", "nlp_deploy_top3", "deploy_recipe"] + [_transfer_id(x) for x in NLP_UNION]:
+    load_pred("panel", m)
+for m in NLP_UNION:
+    load_pred("event", m)
+BUNDLE = {"stamp": STAMP, "frozen_utc": FREEZE["frozen_utc"], "tasks": TASKS, "horizons": HORIZONS, "classes": CLASSES, "k_sideways": K_SIDE,
+          "universe": TICKERS, "sector_of": SECTOR_OF,
+          "cv_union": CV_UNION, "cv_members": TOP3_CV, "cv_models": {m: {"path": str(SUB["models"] / f"cv_{m}.pt"), "label": LABEL_OF.get(m, m)} for m in CV_UNION},
+          "nlp_union": NLP_UNION, "nlp_members": NLP_DEPLOY_TOP3,
+          "nlp_models": {m: {"kind": "tfidf" if m == "tfidf_lr" else "encoder",
+                             "path": str(SUB["models"] / ("tfidf_lr.joblib" if m == "tfidf_lr" else f"nlp_{m}.pt")),
+                             "transfer_id": _transfer_id(m), "label": LABEL_OF.get(m, m)} for m in NLP_UNION},
+          "cal": {m: CALS["panel"][m] for m in CV_UNION + ["cv_top3", "nlp_deploy_top3", "deploy_recipe"] + [_transfer_id(x) for x in NLP_UNION] if m in CALS["panel"]},
+          "cal_event": {m: CALS["event"][m] for m in NLP_UNION}, "w_fresh": FUSION_W.get("deploy_fresh", {t: 1.0 for t in TASKS}),
+          "mc_nu": MC_CFG["nu"], "mc_scale": MC_CFG.get("scale", 1.0), "no_call": NO_CALL, "answers": ANSWERS, "deploy_skill": FINAL["deploy_skill"]}
+(APP_DIR / "bundle.json").write_text(json.dumps(BUNDLE, indent=1, default=str))
+(APP_DIR / "nav3_core.py").write_text(CORE_SRC); (APP_DIR / "nav3_engine.py").write_text(ENGINE_SRC)
+(APP_DIR / "screen_reader.py").write_text(SCREEN_SRC); (APP_DIR / "app.py").write_text(APP_SRC)
+(APP_DIR / ".streamlit" / "config.toml").write_text('[theme]\nbase = "dark"\nprimaryColor = "#26a69a"\n[server]\nmaxUploadSize = 20\n')
+print("Dashboard written to", APP_DIR, "| CV members:", CV_UNION, "| NLP members:", NLP_UNION)
+
+# %%
+# ---------------------------------------------------------------- parity test: the dashboard engine reproduces the notebook's test predictions
+import importlib
+sys.path.insert(0, str(APP_DIR))
+for mod in ("nav3_core", "nav3_engine", "screen_reader"):
+    sys.modules.pop(mod, None)
+ENG = importlib.import_module("nav3_engine")
+BE = ENG.load_bundle(str(APP_DIR))
+PAR = []
+if HAS_GPU and CV_UNION:
+    dep = load_pred("panel", "deploy_recipe")
+    tr_cand = np.where(HAS_8K & (~HAS_PER | (np.nan_to_num(AGE["8k"], nan=1e9) <= np.nan_to_num(AGE["per"], nan=1e9))), LATEST["8k"], LATEST["per"])
+    rr_f = np.flatnonzero(TEM & FRESH); rr_n = np.flatnonzero(TEM & ~FRESH)
+    pick = list(np.random.default_rng(4).choice(rr_f, min(4, len(rr_f)), replace=False)) + list(np.random.default_rng(5).choice(rr_n, min(4, len(rr_n)), replace=False))
+    for r in pick:
+        cv = ENG.cv_chain(BE, np.asarray(IMG[[r]]))
+        nlp = ENG.nlp_chain(BE, [EV_TEXT[int(tr_cand[r])]]) if FRESH[r] and NLP_UNION else None
+        fin = ENG.final_chain(BE, cv, nlp)
+        PAR.append({"row": int(r), "fresh_text": bool(FRESH[r]), "max_abs_dprob_dir": float(max(np.abs(fin[f"dir_{h}"][0] - dep[f"dir_{h}"][r]).max() for h in HORIZONS)),
+                    "max_abs_dlogvol": float(max(abs(fin[f"vol_{h}"][0] - dep[f"vol_{h}"][r]) for h in HORIZONS)),
+                    "max_abs_dprob_dd": float(max(abs(fin[f"dd_{h}"][0] - dep[f"dd_{h}"][r]) for h in HORIZONS))})
+    PAR_DF = pd.DataFrame(PAR); PAR_DF.to_csv(SUB["tables"] / "dashboard_parity.csv", index=False); display(PAR_DF.round(5))
+    PARITY_OK = bool((PAR_DF[["max_abs_dprob_dir", "max_abs_dlogvol", "max_abs_dprob_dd"]] < 0.02).all().all())
+    print("Dashboard parity passed: engine = notebook within 0.02." if PARITY_OK else
+          "WARNING: dashboard parity above 0.02 (see dashboard_parity.csv). Reports still build; send the table to Claude Code.")
+    ENG._CACHE.clear(); torch.cuda.empty_cache()
+
+# %%
+# ---------------------------------------------------------------- launch (Colab port proxy; optional public tunnel, OFF by default)
+PUBLIC_TUNNEL = False      # True = cloudflared quick tunnel: anyone with the link can use the app while this runtime lives
+import urllib.request
+log_f = open(APP_DIR / "streamlit.log", "w")
+proc = subprocess.Popen([sys.executable, "-m", "streamlit", "run", str(APP_DIR / "app.py"), "--server.port", "8501", "--server.headless", "true",
+                         "--browser.gatherUsageStats", "false"], cwd=str(APP_DIR), env={**os.environ, "NAV3_BUNDLE": str(APP_DIR)}, stdout=log_f, stderr=log_f)
+for _ in range(90):
+    try:
+        if urllib.request.urlopen("http://localhost:8501/_stcore/health", timeout=2).read().decode().strip() == "ok":
+            break
+    except Exception:
+        time.sleep(1)
+else:
+    print("Streamlit did not start; log:"); print((APP_DIR / "streamlit.log").read_text()[-3000:])
+if IN_COLAB:
+    from google.colab import output
+    print("Open the dashboard:", output.eval_js("google.colab.kernel.proxyPort(8501)"))
+    output.serve_kernel_port_as_window(8501)
+if PUBLIC_TUNNEL:
+    subprocess.run(["wget", "-q", "-O", "/content/cloudflared", "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"], check=True)
+    os.chmod("/content/cloudflared", 0o755)
+    tun = subprocess.Popen(["/content/cloudflared", "tunnel", "--url", "http://localhost:8501", "--no-autoupdate"], stderr=subprocess.PIPE, text=True)
+    for line in tun.stderr or []:
+        m_ = re.search(r"https://\S+trycloudflare.com", line)
+        if m_:
+            print("PUBLIC URL (anyone with it can use the app):", m_.group(0)); break
+tick("24 dashboard")

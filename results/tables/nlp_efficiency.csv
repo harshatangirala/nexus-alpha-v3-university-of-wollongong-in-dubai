@@ -1,0 +1,8 @@
+model,params_m,max_tokens,train_minutes,docs_per_s_inference,val_mean_rank
+finbert_ft,109.9,512.0,0.41,1095.4,4.29
+secbert_ft,109.5,512.0,0.42,1082.2,4.25
+roberta_l_ft,355.9,512.0,1.44,523.2,3.5
+longformer_ft,149.1,4096.0,18.61,31.7,3.88
+deberta_l_ft,434.5,512.0,7.81,70.9,4.5
+fingpt_frozen,6738.0,1024.0,,,4.67
+tfidf_lr,0.75,,,,2.92

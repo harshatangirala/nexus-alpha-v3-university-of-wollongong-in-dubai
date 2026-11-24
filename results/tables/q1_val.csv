@@ -1,0 +1,97 @@
+task,role,model,n,primary
+dir_5,prior,prior,4600,0.19209738986897762
+dir_5,technical (reference),tech_gbm,4600,0.19209738986897762
+dir_5,best CV,convnext_t_ft,4600,0.33887783440566666
+dir_5,best NLP (panel),roberta_l_panel_frozen,4600,0.22971684130035963
+dir_5,top-3 CV,cv_top3,4600,0.3281424811726374
+dir_5,top-3 NLP,nlp_panel_top3,4600,0.19396947947450996
+dir_5,best fusion,fusion_late_best,4600,0.33887783440566666
+dir_5,dashboard recipe,deploy_recipe,4600,0.3281424811726374
+dir_10,prior,prior,4600,0.1859979101358412
+dir_10,technical (reference),tech_gbm,4600,0.2522779189445856
+dir_10,best CV,convnext_t_ft,4600,0.34942049396659036
+dir_10,best NLP (panel),longformer_panel_frozen,4600,0.25304934211004976
+dir_10,top-3 CV,cv_top3,4600,0.333895455933861
+dir_10,top-3 NLP,nlp_panel_top3,4600,0.23011920580923442
+dir_10,best fusion,fusion_late_best,4600,0.34942049396659036
+dir_10,dashboard recipe,deploy_recipe,4600,0.333895455933861
+dir_20,prior,prior,4600,0.18607323825941594
+dir_20,technical (reference),tech_gbm,4600,0.2541048363741674
+dir_20,best CV,convnext_t_ft,4600,0.3393050491289542
+dir_20,best NLP (panel),secbert_panel_ft,4600,0.2883885431577728
+dir_20,top-3 CV,cv_top3,4600,0.34716933824480023
+dir_20,top-3 NLP,nlp_panel_top3,4600,0.26740326995476776
+dir_20,best fusion,fusion_late_top3,4600,0.34716933824480023
+dir_20,dashboard recipe,deploy_recipe,4600,0.3499237525685768
+dir_40,prior,prior,4600,0.15598112683874552
+dir_40,technical (reference),tech_gbm,4600,0.2903103384452128
+dir_40,best CV,effnet_b0_ft,4600,0.33340128344101233
+dir_40,best NLP (panel),deberta_l_panel_ft,4600,0.31174122198306736
+dir_40,top-3 CV,cv_top3,4600,0.3298747794764134
+dir_40,top-3 NLP,nlp_panel_top3,4600,0.28583849993250726
+dir_40,best fusion,fusion_late_best,4600,0.33340128344101233
+dir_40,dashboard recipe,deploy_recipe,4600,0.3298747794764134
+vol_5,prior,prior,4600,-0.20797516853929143
+vol_5,technical (reference),tech_gbm,4600,0.4683535023450869
+vol_5,best CV,swin_t_ft,4600,0.014165899123673387
+vol_5,best NLP (panel),deberta_l_panel_frozen,4600,-0.06360201329714599
+vol_5,top-3 CV,cv_top3,4600,0.07760676277723133
+vol_5,top-3 NLP,nlp_panel_top3,4600,-0.0658562492284358
+vol_5,best fusion,fusion_late_top3,4600,0.13593064408237643
+vol_5,dashboard recipe,deploy_recipe,4600,0.093521234137936
+vol_10,prior,prior,4600,-0.23266581821070775
+vol_10,technical (reference),tech_gbm,4600,0.47277573128636974
+vol_10,best CV,vit_b16_ft,4600,-0.028617159272971593
+vol_10,best NLP (panel),deberta_l_panel_frozen,4600,-0.0610610608714337
+vol_10,top-3 CV,cv_top3,4600,0.03643335734967301
+vol_10,top-3 NLP,nlp_panel_top3,4600,-0.04111529267014813
+vol_10,best fusion,fusion_late_top3,4600,0.11183287313820878
+vol_10,dashboard recipe,deploy_recipe,4600,0.05546902030163614
+vol_20,prior,prior,4600,-0.24648825503967076
+vol_20,technical (reference),tech_gbm,4600,0.4390398969607382
+vol_20,best CV,vit_b16_ft,4600,-0.07865758062282291
+vol_20,best NLP (panel),deberta_l_panel_frozen,4600,-0.038065711150156334
+vol_20,top-3 CV,cv_top3,4600,-0.0005190369264227446
+vol_20,top-3 NLP,nlp_panel_top3,4600,-0.02132398217735565
+vol_20,best fusion,fusion_late_top3,4600,0.1177581593146575
+vol_20,dashboard recipe,deploy_recipe,4600,0.021491029540812057
+vol_40,prior,prior,4600,-0.24945718645101556
+vol_40,technical (reference),tech_gbm,4600,0.4790836088331246
+vol_40,best CV,yolov8_cls_ft,4600,-0.162391251718228
+vol_40,best NLP (panel),deberta_l_panel_frozen,4600,0.0005566545174268134
+vol_40,top-3 CV,cv_top3,4600,-0.10608701673807341
+vol_40,top-3 NLP,nlp_panel_top3,4600,-0.0030233226892493192
+vol_40,best fusion,fusion_late_top3,4600,0.03798402201918605
+vol_40,dashboard recipe,deploy_recipe,4600,-0.09189178906853535
+dd_5,prior,prior,4600,0.5
+dd_5,technical (reference),tech_gbm,4600,0.6579361309597566
+dd_5,best CV,swin_t_ft,4600,0.5740532310841261
+dd_5,best NLP (panel),deberta_l_panel_frozen,4600,0.6580915928939555
+dd_5,top-3 CV,cv_top3,4600,0.5417177224310346
+dd_5,top-3 NLP,nlp_panel_top3,4600,0.671973024199285
+dd_5,best fusion,fusion_late_top3,4600,0.6754734991899917
+dd_5,dashboard recipe,deploy_recipe,4600,0.5352663389919182
+dd_10,prior,prior,4600,0.5
+dd_10,technical (reference),tech_gbm,4600,0.6512599140240157
+dd_10,best CV,resnet50_ft,4600,0.526488106904398
+dd_10,best NLP (panel),roberta_l_panel_frozen,4600,0.6498181923390657
+dd_10,top-3 CV,cv_top3,4600,0.533515420985532
+dd_10,top-3 NLP,nlp_panel_top3,4600,0.6654804370103653
+dd_10,best fusion,fusion_late_top3,4600,0.6654804370103653
+dd_10,dashboard recipe,deploy_recipe,4600,0.5485406855306114
+dd_20,prior,prior,4600,0.5
+dd_20,technical (reference),tech_gbm,4600,0.608746465431186
+dd_20,best CV,effnet_b0_ft,4600,0.5371596998592437
+dd_20,best NLP (panel),longformer_panel_frozen,4600,0.6194671206786372
+dd_20,top-3 CV,cv_top3,4600,0.5364466515050894
+dd_20,top-3 NLP,nlp_panel_top3,4600,0.6291007785449062
+dd_20,best fusion,fusion_late_top3,4600,0.6291007785449062
+dd_20,dashboard recipe,deploy_recipe,4600,0.5527424755973787
+dd_40,prior,prior,4600,0.5
+dd_40,technical (reference),tech_gbm,4600,0.606187403771664
+dd_40,best CV,vit_b16_ft,4600,0.506034829268157
+dd_40,best NLP (panel),longformer_panel_frozen,4600,0.5785826247861344
+dd_40,top-3 CV,cv_top3,4600,0.5100401335121284
+dd_40,top-3 NLP,nlp_panel_top3,4600,0.5975408860527353
+dd_40,best fusion,fusion_late_top3,4600,0.5975408860527353
+dd_40,dashboard recipe,deploy_recipe,4600,0.5313798008365271

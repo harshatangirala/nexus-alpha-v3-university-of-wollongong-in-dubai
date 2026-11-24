@@ -1,0 +1,70 @@
+# %% [markdown]
+## 15. NLP baseline: TF-IDF + logistic / ridge regression (and which words go with big moves, Q8)
+
+Word and two-word n-grams (sub-linear TF, document frequency ≥ 5, 50,000 features) fitted on training filings; logistic regression for direction and drawdown, ridge regression for volatility; regularisation chosen on the inner block. In finance this simple model is notoriously hard to beat (Loughran and McDonald 2016): if a transformer cannot beat it, the problem is the signal or the pipeline, not the model size.
+
+**Q8, words.** A separate ridge model on the development filings predicts the **size** of the market reaction (|z|) and its **sign** (AR₂) from the same n-grams; its largest coefficients show which words go with big or positive/negative reactions. These are associations inside the sample, not causes; boilerplate legal phrases appear when they mark a filing type.
+
+# %%
+import scipy.sparse as sp
+def fit_heads_sparse(ctx, Xs, fit_mask, sel_mask, tasks=None, keep=None):
+    """As fit_heads (linear), for sparse TF-IDF matrices. keep: optional dict that receives the fitted model per task (for deployment)."""
+    raw = {}
+    for t in (tasks or TASKS):
+        kd = t.split("_")[0]; fr, sr = ctx.rows(t, fit_mask), ctx.rows(t, sel_mask)
+        out = np.full((Xs.shape[0], 3) if kd == "dir" else Xs.shape[0], np.nan)
+        if len(fr) < 80 or len(sr) < 20:
+            raw[t] = out; continue
+        y_f, y_s = ctx.Y[t][fr], ctx.Y[t][sr]; best, bl = None, np.inf
+        for c in (CFG["probe"]["alpha_grid"] if kd == "vol" else [0.1, 1.0, 10.0]):
+            if kd == "vol":
+                m = Ridge(alpha=c).fit(Xs[fr], y_f); loss = float(np.mean((m.predict(Xs[sr]) - y_s) ** 2))
+            else:
+                if len(np.unique(y_f)) < 2:
+                    continue
+                m = LogisticRegression(C=c, max_iter=3000).fit(Xs[fr], y_f.astype(int))
+                ps = np.clip(m.predict_proba(Xs[sr]), 1e-9, 1); yi = y_s.astype(int)
+                if ps.shape[1] != (3 if kd == "dir" else 2):
+                    continue
+                loss = float(-np.mean(np.log(ps[np.arange(len(yi)), yi])))
+            if loss < bl:
+                best, bl = m, loss
+        if best is None:
+            raw[t] = out; continue
+        if keep is not None:
+            keep[t] = best
+        if kd == "vol":
+            out = best.predict(Xs)
+        elif kd == "dir":
+            out = np.log(np.clip(best.predict_proba(Xs), 1e-9, 1))
+        else:
+            q = np.clip(best.predict_proba(Xs)[:, 1], 1e-6, 1 - 1e-6); out = np.log(q / (1 - q))
+        raw[t] = out
+    return raw
+
+TF = CFG["tfidf"]
+TFIDF = TfidfVectorizer(ngram_range=tuple(TF["ngram"]), min_df=TF["min_df"], max_features=TF["max_features"], sublinear_tf=True,
+                        lowercase=True, token_pattern=r"(?u)\b[a-zA-Z][a-zA-Z\-]{2,}\b", dtype=np.float32)
+_tr_ev = EVENT.mask["train"]
+TFIDF.fit([EV_TEXT[i] for i in np.flatnonzero(_tr_ev)])
+X_TFIDF = TFIDF.transform(EV_TEXT).tocsr()
+print("TF-IDF matrix:", X_TFIDF.shape)
+TFIDF_MODELS = {}
+finalize(EVENT, "tfidf_lr", fit_heads_sparse(EVENT, X_TFIDF, EVENT.mask["train"], EVENT.mask["inner"], keep=TFIDF_MODELS), "nlp_baseline",
+         label="TF-IDF + logistic / ridge", params_m=round(X_TFIDF.shape[1] * 15 / 1e6, 3))
+finalize(EVENT, "prior_event", prior_raw(EVENT), "baseline", label="Prior (event base rates)")
+joblib.dump({"vectorizer": TFIDF, "models": TFIDF_MODELS}, SUB["models"] / "tfidf_lr.joblib")
+
+# Q8: which n-grams go with large and with positive / negative reactions (development filings)
+vocab = np.array(TFIDF.get_feature_names_out())
+dev_ev = np.flatnonzero(EV.block.isin(["train", "inner", "val"]).values & np.isfinite(EV["abs_z"].values))
+WORDS = {}
+for col, lab in (("abs_z", "size of reaction |z|"), ("ar2", "signed abnormal return")):
+    y = EV[col].values[dev_ev]; y = np.clip(y, *np.nanpercentile(y, [1, 99]))
+    rg = Ridge(alpha=10.0).fit(X_TFIDF[dev_ev], (y - y.mean()) / (y.std() + 1e-12))
+    o = np.argsort(rg.coef_)
+    WORDS[col] = pd.DataFrame({"top_positive": vocab[o[::-1][:25]], "coef_pos": rg.coef_[o[::-1][:25]].round(3),
+                               "top_negative": vocab[o[:25]], "coef_neg": rg.coef_[o[:25]].round(3)})
+    WORDS[col].to_csv(SUB["tables"] / f"nlp_words_{col}_dev.csv", index=False)
+    print(f"Words most associated with {lab} (development filings, ridge on TF-IDF):"); display(WORDS[col].head(15))
+tick("15 tfidf")

@@ -1,0 +1,463 @@
+# %% [markdown]
+## 12. Computer-vision analysis on the validation block (2022-2023)
+
+Everything in this section uses **validation** rows only; it is where models are compared and chosen. The same tables are recomputed once on the locked test block in §23.
+
+### 12.1 Leaderboard and the best CV model (Q2, Q4)
+
+# %%
+CV_MAIN = [m for m in CV_FT_IDS.values() if REG.get(m, {}).get("status") == "RUN"]
+CV_OTHER = [m for m in [f"{n}_frozen" for n in FROZEN_CV] + ["resnet50_random_frozen", "resnet50_frozen_shuffled", "yolov8_det_patterns",
+                         "resnet50_ft_noaug", "resnet50_scratch"] if REG.get(m, {}).get("status") == "RUN"]
+LABEL_OF = {m: REG.get(m, {}).get("label", m) for m in REG}
+LB_CV_VAL = leaderboard(PANEL, CV_MAIN + CV_OTHER + BASELINES, PANEL.mask["val"])
+LB_CV_VAL.to_csv(SUB["tables"] / "cv_leaderboard_val.csv", index=False)
+PIV_CV = LB_CV_VAL[LB_CV_VAL.status == "RUN"].pivot_table(index="model", columns="task", values="primary").reindex(columns=TASKS)
+CV_MAIN = [m for m in CV_MAIN if m in PIV_CV.index]
+display(PIV_CV.round(3))
+CV_RANK = mean_rank(LB_CV_VAL[LB_CV_VAL.model.isin(CV_MAIN)])
+CV_BEST = CV_RANK.index[0] if len(CV_RANK) else None
+BEST_CV_TASK = {t: PIV_CV.loc[CV_MAIN, t].idxmax() for t in TASKS if PIV_CV.loc[CV_MAIN, t].notna().any()} if CV_MAIN else {}
+print("Mean rank over the 12 tasks (validation, 1 = best):"); display(CV_RANK.round(2).to_frame("mean_rank"))
+CV_RANK.to_frame("mean_rank").to_csv(SUB["tables"] / "cv_rank_val.csv")
+if CV_MAIN:
+    fig, ax = plt.subplots(figsize=(13, 0.45 * len(PIV_CV) + 1.5))
+    Z = PIV_CV.copy()
+    for kd in ("dir", "vol", "dd"):        # colour by rank within each task column, annotate raw values
+        cols = [t for t in TASKS if t.startswith(kd)]
+        Z[cols] = PIV_CV[cols].rank(pct=True)
+    ax.imshow(Z.values, cmap="RdYlGn", aspect="auto", vmin=0, vmax=1)
+    for i in range(PIV_CV.shape[0]):
+        for j in range(PIV_CV.shape[1]):
+            v = PIV_CV.values[i, j]
+            ax.text(j, i, "" if not np.isfinite(v) else f"{v:.3f}", ha="center", va="center", fontsize=6.5)
+    ax.set_xticks(range(len(TASKS))); ax.set_xticklabels(TASKS, rotation=45, fontsize=7)
+    ax.set_yticks(range(len(PIV_CV))); ax.set_yticklabels(PIV_CV.index, fontsize=7)
+    ax.set_title("Validation primary metric (dir: macro-F1, vol: R², dd: ROC-AUC); colour = rank within column")
+    plt.tight_layout(); savefig(fig, "cv_leaderboard_val.png"); plt.show()
+SKILL_CV_VAL = pd.DataFrame([{"task": t, "model": m, **skill_test(PANEL, t, load_pred("panel", m)[t], PANEL.mask["val"])}
+                             for t, m in BEST_CV_TASK.items()])
+if len(SKILL_CV_VAL):
+    SKILL_CV_VAL.to_csv(SUB["tables"] / "cv_skill_val.csv", index=False); display(SKILL_CV_VAL.round(4))
+
+def why_best(best, rank, piv, main):
+    """Evidence-based explanation of why the best model ranks first (generated from the tables, not typed in)."""
+    if best is None:
+        return "No CV model ran."
+    lines = [f"**{LABEL_OF.get(best, best)}** has the best mean rank ({rank[best]:.2f}) over the 12 validation tasks."]
+    for kd in ("dir", "vol", "dd"):
+        cols = [t for t in TASKS if t.startswith(kd) and t in piv.columns]
+        if not cols:
+            continue
+        gap = (piv.loc[best, cols] - piv.loc[[m for m in main if m != best], cols].max()).mean()
+        lines.append(f"{TASK_LABEL[kd]}: mean {PRIMARY[kd]} {piv.loc[best, cols].mean():.3f} "
+                     f"({'ahead of' if gap > 0 else 'behind'} the best other model on that target by {abs(gap):.3f} on average).")
+    fz = best.replace("_ft", "_frozen")
+    if fz != best and fz in piv.index:
+        lines.append(f"Fine-tuning changed its mean primary metric by {float((piv.loc[best] - piv.loc[fz]).mean()):+.3f} versus its frozen features, "
+                     "so most of its edge " + ("comes from adapting to charts." if float((piv.loc[best] - piv.loc[fz]).mean()) > 0.005 else "was already in the pre-trained features or is small."))
+    tm = REG.get(best, {}).get("train_minutes")
+    lines.append(f"Size: {REG.get(best, {}).get('params_m', '?')} M parameters" + (f", {tm} training minutes." if tm is not None else "."))
+    lines.append("Caution: validation was also used to choose it, so its validation lead is optimistic; §23 gives the unbiased test result.")
+    return " ".join(lines)
+WHY_CV = why_best(CV_BEST, CV_RANK, PIV_CV, CV_MAIN)
+display(Markdown(WHY_CV)); (SUB["results"] / "why_cv_best_val.md").write_text(WHY_CV)
+
+# %% [markdown]
+### 12.2 Model combinations (Q3) and the best model or ensemble per target (Q4)
+Every pair (21) and triple (35) of the seven fine-tuned CV models is averaged with **equal weights** (calibrated probabilities; log-volatility); nothing is fitted, so a combination can only win by genuinely complementary errors. The top-3 ensemble per task uses the three best single models on validation.
+
+# %%
+COMBO_ROWS = []
+if len(CV_MAIN) >= 2:
+    for k in (2, 3):
+        for combo in itertools.combinations(CV_MAIN, k):
+            avg = average_predictions([load_pred("panel", m) for m in combo])
+            for t in TASKS:
+                r = PANEL.rows(t, PANEL.mask["val"], avg[t])
+                COMBO_ROWS.append({"combo": " + ".join(c.replace("_ft", "") for c in combo), "size": k, "task": t,
+                                   "primary": primary_value(t, PANEL.Y[t][r], avg[t][r])})
+    for m in CV_MAIN:
+        for t in TASKS:
+            COMBO_ROWS.append({"combo": m.replace("_ft", ""), "size": 1, "task": t, "primary": PIV_CV.loc[m, t]})
+COMBO_VAL = pd.DataFrame(COMBO_ROWS)
+if len(COMBO_VAL):
+    COMBO_VAL.to_csv(SUB["tables"] / "cv_combos_val.csv", index=False)
+    cpiv = COMBO_VAL.pivot_table(index="combo", columns="task", values="primary")
+    combo_rank = cpiv.rank(ascending=False).mean(1).sort_values()
+    BEST_COMBO = combo_rank.index[0]
+    print("Best 10 single models and combinations by mean rank (validation):"); display(combo_rank.head(10).round(2).to_frame("mean_rank"))
+    for named in ["jkx_cnn + resnet50", "effnet_b0 + resnet50", "resnet50 + effnet_b0"]:
+        if named in cpiv.index:
+            print(f"  {named}: rank {int((combo_rank.index == named).argmax()) + 1} of {len(combo_rank)}")
+    best_per_task = best_rows(COMBO_VAL, ["task"]).set_index("task")[["combo", "size", "primary"]]
+    display(best_per_task)
+    best_per_task.to_csv(SUB["tables"] / "cv_best_per_task_val.csv")
+    combo_rank.to_frame("mean_rank").to_csv(SUB["tables"] / "cv_combo_rank_val.csv")
+TOP3_CV = {t: list(PIV_CV.loc[CV_MAIN, t].dropna().sort_values(ascending=False).index[: CFG["top_k"]]) for t in TASKS} if CV_MAIN else {}
+BEST_COMBO = combo_rank.index[0] if len(COMBO_VAL) else None
+
+# %%
+def ensemble_model(ctx, mid, members_by_task, family, **meta):
+    """Equal-weight average of the members' calibrated predictions per task, then re-calibrated on the inner block."""
+    avg = {}
+    for t in TASKS:
+        mem = members_by_task.get(t) or []
+        avg[t] = (np.mean([np.asarray(load_pred(ctx.name, m)[t], dtype=float) for m in mem], axis=0) if mem
+                  else np.full((ctx.n, 3) if t.startswith("dir") else ctx.n, np.nan))
+    return finalize(ctx, mid, raw_from_probs(avg), family, members=members_by_task, **meta)
+if len(CV_MAIN) >= 3:
+    ensemble_model(PANEL, "cv_top3", TOP3_CV, "cv_ensemble", label="Top-3 CV ensemble (per task, chosen on validation)")
+    ensemble_model(PANEL, "cv_all7", {t: CV_MAIN for t in TASKS}, "cv_ensemble", label="All fine-tuned CV models (equal weights)")
+    display(leaderboard(PANEL, ["cv_top3", "cv_all7", CV_BEST], PANEL.mask["val"]).pivot_table(index="model", columns="task", values="primary").round(3))
+
+# %% [markdown]
+### 12.3 Sectors (Q5): which model works best where, and is any network sector-specific?
+**Interaction test (H6).** Statistic: for each sector, subtract the sector's mean metric over models (removes "some sectors are easier"); then sum over models the variance of these centred values across sectors. A large value means rankings change by sector. Null: the 50 stocks are reassigned to sectors at random (10 per sector), keeping each stock's rows together; 200 permutations.
+
+# %%
+def sector_table(ctx, models, mask):
+    rows = []
+    for s in SECTORS:
+        ms = mask & (ctx.sectors == s)
+        for m in models:
+            pr = load_pred(ctx.name, m)
+            for t in TASKS:
+                r = ctx.rows(t, ms, pr[t])
+                rows.append({"sector": s, "model": m, "task": t, "target": t.split("_")[0], "n": len(r),
+                             "primary": primary_value(t, ctx.Y[t][r], pr[t][r]) if len(r) >= 20 else np.nan})
+    return pd.DataFrame(rows)
+
+def sector_interaction_test(ctx, models, mask, kind, n_perm=None, seed=0):
+    n_perm = n_perm or (50 if QUICK else 200)
+    tasks = [t for t in TASKS if t.startswith(kind)]
+    preds = {m: load_pred(ctx.name, m) for m in models}
+    stocks = np.array(sorted(set(ctx.tickers[mask])))
+    true_sec = {t: SECTOR_OF[t] for t in stocks}
+    def stat(sec_map):
+        sec_arr = np.array([sec_map.get(t, "") for t in ctx.tickers])
+        M = np.full((len(SECTORS), len(models)), np.nan)
+        for i, s in enumerate(SECTORS):
+            ms = mask & (sec_arr == s)
+            for j, m in enumerate(models):
+                vals = []
+                for t in tasks:
+                    r = ctx.rows(t, ms, preds[m][t])
+                    if len(r) >= 20:
+                        vals.append(primary_value(t, ctx.Y[t][r], preds[m][t][r]))
+                M[i, j] = np.mean(vals) if vals else np.nan
+        C = M - np.nanmean(M, axis=1, keepdims=True)
+        return float(np.nansum(np.nanvar(C, axis=0))), M
+    obs, M = stat(true_sec)
+    rng = np.random.default_rng(seed); null = []
+    labels = np.array([true_sec[t] for t in stocks])
+    for _ in range(n_perm):
+        null.append(stat(dict(zip(stocks, rng.permutation(labels))))[0])
+    return {"target": kind, "statistic": obs, "p": float((1 + np.sum(np.array(null) >= obs)) / (1 + n_perm)), "n_perm": n_perm}, M
+
+if CV_MAIN:
+    SEC_CV_VAL = sector_table(PANEL, CV_MAIN, PANEL.mask["val"]); SEC_CV_VAL.to_csv(SUB["tables"] / "cv_sector_val.csv", index=False)
+    sec_mean = SEC_CV_VAL.groupby(["sector", "target", "model"])["primary"].mean().reset_index()
+    BEST_BY_SECTOR_VAL = best_rows(sec_mean, ["sector", "target"]).pivot(index="sector", columns="target", values="model")
+    print("Best fine-tuned CV model per sector and target (validation; mean primary over horizons):"); display(BEST_BY_SECTOR_VAL)
+    BEST_BY_SECTOR_VAL.to_csv(SUB["tables"] / "cv_best_by_sector_val.csv")
+    H6_VAL = []
+    fig, axes = plt.subplots(1, 3, figsize=(16, 3.6))
+    for a_, kd in zip(axes, ["dir", "vol", "dd"]):
+        res, M = sector_interaction_test(PANEL, CV_MAIN, PANEL.mask["val"], kd)
+        H6_VAL.append(res)
+        a_.imshow(M - np.nanmean(M, 1, keepdims=True), cmap="coolwarm", aspect="auto")
+        a_.set_xticks(range(len(CV_MAIN))); a_.set_xticklabels([m.replace("_ft", "") for m in CV_MAIN], rotation=60, fontsize=7)
+        a_.set_yticks(range(len(SECTORS))); a_.set_yticklabels(SECTORS, fontsize=7)
+        a_.set_title(f"{TASK_LABEL[kd]}: centred {PRIMARY[kd]} (perm. p = {res['p']:.3f})", fontsize=8)
+    plt.tight_layout(); savefig(fig, "cv_sector_interaction_val.png"); plt.show()
+    pd.DataFrame(H6_VAL).to_csv(SUB["tables"] / "cv_sector_interaction_val.csv", index=False); display(pd.DataFrame(H6_VAL))
+
+# %% [markdown]
+### 12.4 Ablations: fine-tuned vs frozen, pretrained vs scratch vs random, augmentation, label shuffle
+Paired month-block bootstrap on validation; Δ = first minus second, on each target's primary metric averaged over the four horizons.
+
+# %%
+def paired_delta_family(ctx, kind, pa, pb, mask, seed=0):
+    tasks = [t for t in TASKS if t.startswith(kind)]
+    r = ctx.rows(tasks[0], mask, pa[tasks[0]])
+    for t in tasks:
+        r = np.intersect1d(r, np.intersect1d(ctx.rows(t, mask, pa[t]), ctx.rows(t, mask, pb[t])))
+    if len(r) < 30:
+        return {"n": len(r), "delta": np.nan, "lo": np.nan, "hi": np.nan, "p": np.nan}
+    def fn(ix):
+        rr = r[ix]
+        return float(np.mean([primary_value(t, ctx.Y[t][rr], pa[t][rr]) - primary_value(t, ctx.Y[t][rr], pb[t][rr]) for t in tasks]))
+    bs = bootstrap(fn, month_groups(ctx.months[r]), seed=seed); est = fn(np.arange(len(r)))
+    p2 = 2 * min((1 + np.sum(bs <= 0)) / (1 + len(bs)), (1 + np.sum(bs >= 0)) / (1 + len(bs)))
+    return {"n": len(r), "delta": est, "lo": float(np.nanpercentile(bs, 2.5)), "hi": float(np.nanpercentile(bs, 97.5)), "p": float(min(1, p2))}
+
+ABL_PAIRS = [(f"{n}_ft", f"{n}_frozen", "fine-tuned vs frozen") for n in FROZEN_CV] + [
+    ("resnet50_ft", "resnet50_scratch", "ImageNet init vs random init (both fine-tuned)"),
+    ("resnet50_ft", "resnet50_ft_noaug", "with vs without augmentation"),
+    ("resnet50_frozen", "resnet50_random_frozen", "pretrained vs random frozen features"),
+    ("resnet50_frozen_shuffled", "prior", "label-shuffle control vs prior (should be ~0 or negative)"),
+    ("tech_gbm", CV_BEST or "prior", "technical LightGBM vs best CV model (reference)")]
+ABL = []
+for a, b, what in ABL_PAIRS:
+    if REG.get(a, {}).get("status") != "RUN" or REG.get(b, {}).get("status") != "RUN":
+        continue
+    pa, pb = load_pred("panel", a), load_pred("panel", b)
+    for kd in ("dir", "vol", "dd"):
+        ABL.append({"comparison": what, "A": a, "B": b, "target": kd, **paired_delta_family(PANEL, kd, pa, pb, PANEL.mask["val"])})
+ABL_VAL = pd.DataFrame(ABL)
+if len(ABL_VAL):
+    ABL_VAL["p_holm"] = holm(ABL_VAL["p"].values); ABL_VAL.to_csv(SUB["tables"] / "cv_ablations_val.csv", index=False)
+    display(ABL_VAL.round(4))
+
+# %% [markdown]
+### 12.5 Error analysis (best CV model, validation)
+
+# %%
+def load_chartnet(mid):
+    ck = torch.load(SUB["models"] / f"cv_{mid}.pt", map_location="cpu", weights_only=False)
+    net = ChartNet(ck["spec"], pretrained=False); net.load_state_dict(ck["state_dict"])
+    return net.to(DEV).eval(), ck
+
+if CV_BEST:
+    pb_ = load_pred("panel", CV_BEST); vm = PANEL.mask["val"]
+    fig, axes = plt.subplots(1, 4, figsize=(16, 3.6))
+    for a_, h in zip(axes, HORIZONS):
+        r = PANEL.rows(f"dir_{h}", vm, pb_[f"dir_{h}"])
+        cm = confusion_matrix(PANEL.Y[f"dir_{h}"][r].astype(int), pb_[f"dir_{h}"][r].argmax(1), labels=[0, 1, 2], normalize="true")
+        a_.imshow(cm, cmap="Blues", vmin=0, vmax=1)
+        for i in range(3):
+            for j in range(3):
+                a_.text(j, i, f"{cm[i, j]:.2f}", ha="center", va="center", fontsize=8)
+        a_.set_xticks(range(3)); a_.set_xticklabels(CLASSES, fontsize=7); a_.set_yticks(range(3)); a_.set_yticklabels(CLASSES, fontsize=7)
+        a_.set_title(f"{h}-day direction (rows = truth)", fontsize=8)
+    plt.suptitle(f"Confusion matrices, {CV_BEST}, validation"); plt.tight_layout(); savefig(fig, "cv_confusion_val.png"); plt.show()
+    r = PANEL.rows("dir_20", vm, pb_["dir_20"])
+    E = pd.DataFrame({"correct": pb_["dir_20"][r].argmax(1) == PANEL.Y["dir_20"][r], "sector": P.sector.values[r],
+                      "sigma_decile": pd.qcut(P.sigma.values[r], 10, labels=False, duplicates="drop"),
+                      "market_20d": np.where(X_TECH[r, _fi["spy_ret_20d"]] > 0, "SPY up", "SPY down"),
+                      "quarter": P.date.dt.to_period("Q").astype(str).values[r],
+                      "true": [CLASSES[int(c)] for c in PANEL.Y["dir_20"][r]]})
+    ERR_TABLES = {k: E.groupby(k)["correct"].agg(["mean", "size"]).rename(columns={"mean": "accuracy"}) for k in ["sector", "sigma_decile", "market_20d", "quarter", "true"]}
+    for k, v in ERR_TABLES.items():
+        v.to_csv(SUB["tables"] / f"cv_errors_by_{k}_val.csv")
+    fig, axes = plt.subplots(1, 4, figsize=(16, 3.2))
+    for a_, k in zip(axes, ["sigma_decile", "sector", "quarter", "true"]):
+        ERR_TABLES[k]["accuracy"].plot.bar(ax=a_, color="#2563eb"); a_.axhline(E["correct"].mean(), color="k", ls="--", lw=0.8)
+        a_.set_title(f"20-day direction accuracy by {k}", fontsize=8); a_.tick_params(labelsize=6)
+    plt.tight_layout(); savefig(fig, "cv_errors_val.png"); plt.show()
+    rd = PANEL.rows("dd_20", vm, pb_["dd_20"]); pos = rd[PANEL.Y["dd_20"][rd] == 1]
+    thr_ = np.quantile(pb_["dd_20"][rd], 0.8) if len(rd) else 1.0
+    DD_FN = pd.DataFrame({"sector": P.sector.values[pos], "flagged_top20pct": pb_["dd_20"][pos] >= thr_}).groupby("sector")["flagged_top20pct"].mean()
+    print("Share of real >10 % drawdowns (20 d) that were in the model's top-20 % risk bucket, by sector:"); display(DD_FN.round(3))
+    DD_FN.to_csv(SUB["tables"] / "cv_dd_recall_by_sector_val.csv")
+    wrong = r[(pb_["dir_20"][r].argmax(1) != PANEL.Y["dir_20"][r])]
+    conf = pb_["dir_20"][wrong].max(1); top = wrong[np.argsort(-conf)[:4]]
+    if len(top):
+        fig, axes = plt.subplots(len(top), 3, figsize=(9, 3 * len(top)), squeeze=False)
+        for i, rr in enumerate(top):
+            for j in range(3):
+                axes[i][j].imshow(PALETTE_DARK[np.asarray(IMG[rr, j])]); axes[i][j].axis("off")
+            axes[i][0].set_title(f"{P.at[rr, 'ticker']} {P.at[rr, 'date'].date()}: predicted {CLASSES[int(pb_['dir_20'][rr].argmax())]} "
+                                 f"({pb_['dir_20'][rr].max():.2f}), truth {CLASSES[int(PANEL.Y['dir_20'][rr])]}", fontsize=8, loc="left")
+        plt.tight_layout(); savefig(fig, "cv_confident_errors_val.png", dpi=100); plt.show()
+
+# %% [markdown]
+### 12.6 Explainability: Grad-CAM and occlusion by view and by time
+**Grad-CAM** (Selvaraju et al. 2017) weights the last convolutional (or last transformer-block) feature map by the gradient of one output (here the 20-day UP logit and the 20-day volatility output) and shows where that output is most sensitive. **Limits:** a heat map shows sensitivity, not reasoning; it is coarse (7 × 7 or 14 × 14 cells over 52-70 candles); and on a near-chance target (direction) it highlights what the network reacts to, not a reliable pattern. The **occlusion** table is more quantitative: it blanks a whole view, its newest quarter of bars or its oldest quarter, and measures how much predictions move.
+
+# %%
+def target_layer(net):
+    bb = net.backbone; kind = net.__class__
+    for attr in ("layer4", "stages", "conv_head", "blocks", "layers", "body"):
+        if hasattr(bb, attr):
+            m = getattr(bb, attr)
+            if attr in ("stages", "blocks", "layers") and isinstance(m, (nn.Sequential, nn.ModuleList)):
+                return m[-1]
+            if attr == "body":
+                return m[-2]
+            return m
+    return None
+
+def grad_cam(net, x, which="dir", h_index=2):
+    """x: (1, 3, 3, H, W) float. Returns (3, 224, 224) CAMs (one per view) for the chosen output."""
+    layer = target_layer(net); store = {}
+    def fwd(_, __, out):
+        out = out[0] if isinstance(out, tuple) else out
+        out.retain_grad(); store["a"] = out
+    hd = layer.register_forward_hook(fwd)
+    net.zero_grad(set_to_none=True)
+    with torch.autocast("cuda", dtype=AMP_DTYPE, enabled=False):
+        o = net(x)
+    y = o["dir"][0, h_index, 2] if which == "dir" else o["vol"][0, h_index]
+    y.backward(); hd.remove()
+    a, g = store["a"].float(), store["a"].grad.float()
+    if a.dim() == 3:                                     # transformer tokens (B, N, C): drop prefix tokens, reshape to a grid
+        n = a.shape[1]; s = int(math.isqrt(n)); a, g = a[:, n - s * s:], g[:, n - s * s:]
+        a = a.transpose(1, 2).reshape(a.shape[0], -1, s, s); g = g.transpose(1, 2).reshape(g.shape[0], -1, s, s)
+    elif a.dim() == 4 and a.shape[-1] > a.shape[1] and a.shape[1] == a.shape[2]:   # NHWC (Swin)
+        a, g = a.permute(0, 3, 1, 2), g.permute(0, 3, 1, 2)
+    cam = F.relu((g.mean((2, 3), keepdim=True) * a).sum(1, keepdim=True))
+    cam = F.interpolate(cam, size=(224, 224), mode="bilinear", align_corners=False)[:, 0]
+    cam = cam / cam.flatten(1).max(1)[0].clamp(min=1e-9)[:, None, None]
+    return cam.detach().cpu().numpy()
+
+_cnns = [m for m in CV_RANK.index if m.replace("_ft", "") in ("jkx_cnn", "resnet50", "effnet_b0", "convnext_t", "yolov8_cls")]
+_trf = [m for m in CV_RANK.index if m.replace("_ft", "") in ("vit_b16", "swin_t")]
+XAI_MODELS = [m for m in (_cnns[:1] + _trf[:1]) if m]
+if XAI_MODELS and HAS_GPU:
+    ex_rows = [int(x) for x in np.random.default_rng(7).choice(np.flatnonzero(VA), 3, replace=False)]
+    fig, axes = plt.subplots(len(XAI_MODELS) * len(ex_rows), 6, figsize=(16, 2.7 * len(XAI_MODELS) * len(ex_rows)), squeeze=False)
+    k = 0
+    for m in XAI_MODELS:
+        try:
+            net, _ = load_chartnet(m)
+            for rr in ex_rows:
+                x = batch_images(np.array([rr])).requires_grad_(False)
+                cd = grad_cam(net, x, "dir", HORIZONS.index(20)); cv_ = grad_cam(net, x, "vol", HORIZONS.index(20))
+                for j in range(3):
+                    rgb = PALETTE_DARK[np.asarray(IMG[rr, j])]
+                    axes[k][2 * j].imshow(rgb); axes[k][2 * j].imshow(cd[j], cmap="jet", alpha=0.45); axes[k][2 * j].axis("off")
+                    axes[k][2 * j + 1].imshow(rgb); axes[k][2 * j + 1].imshow(cv_[j], cmap="jet", alpha=0.45); axes[k][2 * j + 1].axis("off")
+                    axes[k][2 * j].set_title(f"{VIEWS[j]}: UP-20d", fontsize=7); axes[k][2 * j + 1].set_title(f"{VIEWS[j]}: vol-20d", fontsize=7)
+                axes[k][0].text(-10, 112, f"{m}\n{P.at[rr, 'ticker']} {P.at[rr, 'date'].date()}", fontsize=7, ha="right", va="center")
+                k += 1
+            del net; torch.cuda.empty_cache()
+        except Exception as e:
+            print(f"Grad-CAM skipped for {m}: {type(e).__name__}: {e}")
+    plt.suptitle("Grad-CAM (red = most sensitive region); sensitivity, not proof of reasoning"); plt.tight_layout()
+    savefig(fig, "cv_gradcam.png", dpi=95); plt.show()
+
+@torch.no_grad()
+def raw_from_float(net, xf, batch=96):
+    res = {"dir": [], "vol": [], "dd": []}
+    for s in range(0, len(xf), batch):
+        with torch.autocast("cuda", dtype=AMP_DTYPE):
+            o = net(xf[s: s + batch])
+        for kk in res:
+            res[kk].append(o[kk].float().cpu().numpy())
+    d, v, q = (np.concatenate(res[kk]) for kk in ("dir", "vol", "dd"))
+    return {**{f"dir_{h}": d[:, j] for j, h in enumerate(HORIZONS)}, **{f"vol_{h}": v[:, j] * VOL_SD[j] + VOL_MU[j] for j, h in enumerate(HORIZONS)},
+            **{f"dd_{h}": q[:, j] for j, h in enumerate(HORIZONS)}}
+
+def occlude(xf, view, part):
+    x = xf.clone(); bg = PAL_DARK_T[0] / 255.0
+    cols = {"all": slice(0, 224), "newest25": slice(168, 224), "oldest25": slice(0, 56)}[part]
+    x[:, view, :, :, cols] = bg.view(1, 3, 1, 1)
+    return x
+
+OCC = []
+if CV_MAIN and HAS_GPU:
+    occ_rows = np.sort(np.random.default_rng(8).choice(np.flatnonzero(VA), min(400, int(VA.sum())), replace=False))
+    for m in list(CV_RANK.index[:3]):
+        try:
+            net, _ = load_chartnet(m); cal = CALS["panel"].get(m) or json.loads((SUB["preds"] / "panel" / f"{m}.cal.json").read_text())
+            xf = batch_images(occ_rows)
+            base = apply_calibration(raw_from_float(net, xf), cal)
+            for j, v in enumerate(VIEWS):
+                for part in ("all", "newest25", "oldest25"):
+                    pr = apply_calibration(raw_from_float(net, occlude(xf, j, part)), cal)
+                    OCC.append({"model": m, "view": v, "blanked": part,
+                                "mean_abs_change_P_up20": float(np.abs(pr["dir_20"][:, 2] - base["dir_20"][:, 2]).mean()),
+                                "mean_abs_change_logvol20": float(np.abs(pr["vol_20"] - base["vol_20"]).mean()),
+                                "mean_abs_change_P_dd20": float(np.abs(pr["dd_20"] - base["dd_20"]).mean())})
+            del net, xf; torch.cuda.empty_cache()
+        except Exception as e:
+            print(f"Occlusion skipped for {m}: {type(e).__name__}: {e}")
+OCC_DF = pd.DataFrame(OCC)
+if len(OCC_DF):
+    OCC_DF.to_csv(SUB["tables"] / "cv_occlusion_val.csv", index=False)
+    display(OCC_DF.pivot_table(index=["view", "blanked"], columns="model", values="mean_abs_change_logvol20").round(4))
+
+# %% [markdown]
+### 12.7 Robustness (corruptions a real screenshot pipeline could introduce)
+Top-3 CV models on 1,000 validation rows: Gaussian pixel noise, blur, JPEG compression (quality 30), a **light chart theme** (style shift never seen in training), screenshot-like down-and-up resizing, and a missing hourly chart.
+
+# %%
+def jpeg(xf, q=30):
+    from PIL import Image as PILImage
+    out = xf.clone(); arr = (xf.clamp(0, 1) * 255).byte().cpu().numpy()
+    for i in range(arr.shape[0]):
+        for v in range(arr.shape[1]):
+            buf = io.BytesIO(); PILImage.fromarray(arr[i, v].transpose(1, 2, 0)).save(buf, format="JPEG", quality=q)
+            out[i, v] = torch.from_numpy(np.asarray(PILImage.open(io.BytesIO(buf.getvalue()))).transpose(2, 0, 1).copy()).float().to(xf.device) / 255
+    return out
+def blur(xf, k=5, s=1.0):
+    ax_ = torch.arange(k, device=xf.device) - k // 2; g = torch.exp(-(ax_ ** 2) / (2 * s * s)); g = g / g.sum()
+    w = (g[:, None] * g[None, :]).expand(3, 1, k, k)
+    z = xf.flatten(0, 1); z = F.conv2d(F.pad(z, (k // 2,) * 4, mode="replicate"), w, groups=3)
+    return z.view_as(xf)
+def resize_screenshot(xf):
+    z = xf.flatten(0, 1); z = F.interpolate(F.interpolate(z, scale_factor=0.5, mode="bilinear", align_corners=False), size=(224, 224), mode="bilinear", align_corners=False)
+    return z.view_as(xf)
+CORRUPT = {"clean": lambda x, rows: x, "gaussian_noise_0.05": lambda x, rows: (x + 0.05 * torch.randn_like(x)).clamp(0, 1),
+           "blur_5px": lambda x, rows: blur(x), "jpeg_q30": lambda x, rows: jpeg(x), "light_theme": lambda x, rows: batch_images(rows, PAL_LIGHT_T),
+           "screenshot_resize_0.5x": lambda x, rows: resize_screenshot(x), "hourly_missing": lambda x, rows: occlude(x, 2, "all")}
+ROB = []
+if CV_MAIN and HAS_GPU:
+    rob_rows = np.sort(np.random.default_rng(9).choice(np.flatnonzero(VA), min(1000, int(VA.sum())), replace=False))
+    for m in list(CV_RANK.index[:3]):
+        try:
+            net, _ = load_chartnet(m); cal = CALS["panel"].get(m) or {}
+            for cname, fn in CORRUPT.items():
+                preds = []
+                for s in range(0, len(rob_rows), 200):
+                    rb = rob_rows[s: s + 200]; preds.append(apply_calibration(raw_from_float(net, fn(batch_images(rb), rb)), cal))
+                pr = {t: np.concatenate([p_[t] for p_ in preds]) for t in preds[0]}
+                row = {"model": m, "corruption": cname}
+                for t in ("dir_20", "vol_20", "dd_20"):
+                    y = PANEL.Y[t][rob_rows]; ok = np.isfinite(y)
+                    row[f"{t}_{PRIMARY[t.split('_')[0]]}"] = primary_value(t, y[ok], pr[t][ok])
+                ROB.append(row)
+            del net; torch.cuda.empty_cache()
+        except Exception as e:
+            print(f"Robustness skipped for {m}: {type(e).__name__}: {e}")
+ROB_DF = pd.DataFrame(ROB)
+if len(ROB_DF):
+    for c in [c for c in ROB_DF.columns if c not in ("model", "corruption")]:
+        ROB_DF[c + "_delta"] = ROB_DF[c] - ROB_DF.groupby("model")[c].transform(lambda s: s[ROB_DF.loc[s.index, "corruption"] == "clean"].iloc[0])
+    ROB_DF.to_csv(SUB["tables"] / "cv_robustness_val.csv", index=False); display(ROB_DF.round(4))
+
+# %% [markdown]
+### 12.8 Computational efficiency
+
+# %%
+EFF = []
+if HAS_GPU:
+    from torch.utils.flop_counter import FlopCounterMode
+    for m in CV_MAIN:
+        try:
+            net, ck = load_chartnet(m)
+            x1 = batch_images(np.array([int(np.flatnonzero(VA)[0])]))
+            with FlopCounterMode(display=False) as fc:
+                with torch.no_grad():
+                    net(x1)
+            flops = fc.get_total_flops()
+            with torch.no_grad():
+                for _ in range(3):
+                    net(x1)
+                torch.cuda.synchronize(); ts = []
+                for _ in range(20):
+                    t0 = time.perf_counter(); net(x1); torch.cuda.synchronize(); ts.append(time.perf_counter() - t0)
+                x64 = batch_images(np.flatnonzero(VA)[:64]); torch.cuda.synchronize(); t0 = time.perf_counter()
+                with torch.autocast("cuda", dtype=AMP_DTYPE):
+                    net(x64)
+                torch.cuda.synchronize(); thr = 64 / (time.perf_counter() - t0)
+            EFF.append({"model": m, "params_m": round(sum(p.numel() for p in net.parameters()) / 1e6, 2), "gflops_per_row_3_views": round(flops / 1e9, 2),
+                        "latency_ms_batch1_fp32": round(1000 * float(np.median(ts)), 1), "rows_per_s_batch64_bf16": round(thr, 1),
+                        "train_minutes": REG[m].get("train_minutes"), "checkpoint_mb": round((SUB["models"] / f"cv_{m}.pt").stat().st_size / 1e6, 1),
+                        "val_mean_rank": round(float(CV_RANK.get(m, np.nan)), 2)})
+            del net; torch.cuda.empty_cache()
+        except Exception as e:
+            print(f"Efficiency skipped for {m}: {type(e).__name__}: {e}")
+EFF_CV = pd.DataFrame(EFF)
+if len(EFF_CV):
+    EFF_CV.to_csv(SUB["tables"] / "cv_efficiency.csv", index=False); display(EFF_CV)
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.scatter(EFF_CV.gflops_per_row_3_views, EFF_CV.val_mean_rank, s=EFF_CV.params_m * 3 + 10, alpha=0.6)
+    for _, r_ in EFF_CV.iterrows():
+        ax.annotate(r_.model.replace("_ft", ""), (r_.gflops_per_row_3_views, r_.val_mean_rank), fontsize=7)
+    ax.invert_yaxis(); ax.set_xlabel("GFLOPs per row (3 charts)"); ax.set_ylabel("validation mean rank (top = better)")
+    ax.set_title("Accuracy vs compute (marker size = parameters)"); ax.grid(alpha=0.3)
+    plt.tight_layout(); savefig(fig, "cv_efficiency.png"); plt.show()
+tick("12 cv analysis")

@@ -1,0 +1,185 @@
+# %% [markdown]
+## 16. Language models, part 1: architectures and frozen embeddings
+
+### 16.1 How the models read a filing
+* **BERT-family encoders** (FinBERT, SEC-BERT, RoBERTa-large, DeBERTa-v3-large) split text into sub-word tokens, add position information and pass them through 12 (base) or 24 (large) self-attention layers; each token's vector is updated from every other token in a **512-token** window. FinBERT continued BERT pre-training on financial news and was tuned for sentiment; SEC-BERT was pre-trained from scratch on 260,773 10-K filings with its own vocabulary; RoBERTa drops next-sentence prediction and trains longer on more data; DeBERTa-v3 separates content and position in attention ("disentangled attention") and is pre-trained as a discriminator (replaced-token detection).
+* **Longformer** replaces full attention by a sliding window plus a few global tokens, so cost grows linearly with length and it reads **4,096 tokens** (about 8 pages) of the MD&A instead of 512.
+* **FinGPT** is a decoder-only LLM (Llama-2-7B) with a LoRA adapter trained by its authors on financial instruction tasks (sentiment, headline classification, NER). We load it in 4-bit NF4 (QLoRA-style), read 1,024 tokens, and use (a) the mean of its last hidden layer as an embedding and (b) its own answer probabilities for "negative / neutral / positive" to a sentiment prompt.
+
+### 16.2 Frozen use
+Documents longer than one window are split into up to 4 chunks of 512 tokens; each chunk is encoded and mean-pooled (attention-masked), and the document vector is the mean of its chunks. 32 principal components (fitted on training filings) feed regularised linear models per task, exactly as for the CV probes. **Length ablation:** the same probe on the first chunk only.
+
+# %%
+from transformers import AutoTokenizer, AutoModel, AutoModelForSequenceClassification
+NLPC = CFG["nlp_models"]; NCH, CL = CFG["nlp_ft"]["frozen_chunks"], CFG["nlp_ft"]["chunk_len"]
+N_EV = len(EV)
+ENCODERS = [m for m, s in NLPC.items() if m != "fingpt"]
+TEXT_EMB = {}
+
+@torch.no_grad()
+def encode_frozen(spec):
+    tok = AutoTokenizer.from_pretrained(spec["hf"])
+    enc = AutoModel.from_pretrained(spec["hf"], torch_dtype=torch.bfloat16).to(DEV).eval()
+    long_ = spec["max_len"] > 512
+    clen = spec["max_len"] - 2
+    ids_all = tok([t_[: 10 * NCH * clen] for t_ in EV_TEXT], add_special_tokens=False, truncation=True, max_length=(clen if long_ else NCH * clen))["input_ids"]
+    cls_id = tok.cls_token_id if tok.cls_token_id is not None else tok.bos_token_id      # [CLS] / <s>
+    sep_id = tok.sep_token_id if tok.sep_token_id is not None else tok.eos_token_id      # [SEP] / </s>
+    chunks, owner, first = [], [], []
+    for i, ids in enumerate(ids_all):
+        ids = ids or [tok.unk_token_id]
+        for k, c0 in enumerate(range(0, len(ids), clen)):
+            chunks.append([cls_id] + list(ids[c0: c0 + clen]) + [sep_id]); owner.append(i); first.append(k == 0)
+    owner, first = np.array(owner), np.array(first)
+    order = np.argsort([len(c) for c in chunks])
+    d = int(enc.config.hidden_size); Z = np.zeros((len(chunks), d), np.float32)
+    bs = 4 if long_ else (64 if d <= 768 else 32)
+    for s in range(0, len(order), bs):
+        ix = order[s: s + bs]; L = max(len(chunks[j]) for j in ix)
+        inp = torch.full((len(ix), L), tok.pad_token_id, dtype=torch.long); att = torch.zeros((len(ix), L), dtype=torch.long)
+        for r, j in enumerate(ix):
+            inp[r, : len(chunks[j])] = torch.tensor(chunks[j]); att[r, : len(chunks[j])] = 1
+        inp, att = inp.to(DEV), att.to(DEV)
+        kw = {}
+        if getattr(enc.config, "model_type", "") == "longformer":
+            g = torch.zeros_like(att); g[:, 0] = 1; kw["global_attention_mask"] = g
+        h = enc(input_ids=inp, attention_mask=att, **kw).last_hidden_state.float()
+        m = att.unsqueeze(-1).float(); Z[ix] = ((h * m).sum(1) / m.sum(1).clamp(min=1)).cpu().numpy()
+    mean_emb = np.zeros((N_EV, d), np.float32); cnt = np.bincount(owner, minlength=N_EV).astype(np.float32)
+    np.add.at(mean_emb, owner, Z); mean_emb /= np.maximum(cnt, 1)[:, None]
+    first_emb = np.zeros((N_EV, d), np.float32); first_emb[owner[first]] = Z[first]
+    n_par = sum(p.numel() for p in enc.parameters())
+    del enc; torch.cuda.empty_cache()
+    return mean_emb, first_emb, n_par, float(np.mean(cnt))
+
+def text_pca(E, fit_mask, k):
+    fr = np.flatnonzero(fit_mask); pca = PCA(min(k, len(fr) - 1, E.shape[1]), random_state=0).fit(E[fr])
+    return pca.transform(E).astype(np.float32), pca
+
+TEXT_PCA, TEXT_PCAOBJ = {}, {}
+for m in ENCODERS:
+    spec = NLPC[m]; fpath = SUB["features"] / f"textemb_{m}_{N_EV}_{TEXT_KEY}.npz"
+    st = Stage(f"text_emb_{m}", [spec, NCH, CL, N_EV, TEXT_KEY], [fpath])
+    try:
+        if not (st.done() and fpath.exists()):
+            if not HAS_GPU:
+                not_run(f"{m}_frozen", "no GPU"); continue
+            t0 = time.time(); E, E1, npar, nch = encode_frozen(spec)
+            np.savez_compressed(fpath, mean=E.astype(np.float16), first=E1.astype(np.float16))
+            st.finish(minutes=round((time.time() - t0) / 60, 2), params_m=round(npar / 1e6, 1), mean_chunks=nch)
+        z = np.load(fpath); TEXT_EMB[m] = z["mean"].astype(np.float32)
+        TEXT_PCA[m], TEXT_PCAOBJ[m] = text_pca(TEXT_EMB[m], EVENT.mask["train"], CFG["probe"]["pca_text"])
+        if not have_pred("event", f"{m}_frozen") or FORCE_RERUN:
+            finalize(EVENT, f"{m}_frozen", fit_heads(EVENT, TEXT_PCA[m], EVENT.mask["train"], EVENT.mask["inner"], "linear"), "nlp_frozen",
+                     encoder=m, label=spec["label"] + " (frozen)")
+        if spec["max_len"] <= 512 and (not have_pred("event", f"{m}_frozen_1chunk") or FORCE_RERUN):
+            Z1, _ = text_pca(z["first"].astype(np.float32), EVENT.mask["train"], CFG["probe"]["pca_text"])
+            finalize(EVENT, f"{m}_frozen_1chunk", fit_heads(EVENT, Z1, EVENT.mask["train"], EVENT.mask["inner"], "linear"),
+                     "nlp_length_ablation", encoder=m, note="first 512 tokens only")
+        print(f"{m}_frozen: val primary (20d)", {t: round(v, 3) for t, v in REG[f"{m}_frozen"]["val_primary"].items() if v is not None and t.endswith("_20")})
+    except Exception as e:
+        failed(f"{m}_frozen", e)
+    gc.collect(); torch.cuda.empty_cache() if HAS_GPU else None
+
+# %%
+# ---------------------------------------------------------------- FinGPT (Llama-2-7B + FinGPT LoRA), 4-bit, frozen
+FINGPT_PROMPT = "Instruction: What is the sentiment of this news? Please choose an answer from {negative/neutral/positive}.\nInput: {text}\nAnswer:"
+def load_fingpt(trainable=False):
+    from transformers import AutoModelForCausalLM, BitsAndBytesConfig
+    from peft import PeftModel
+    from huggingface_hub import hf_hub_download
+    spec = NLPC["fingpt"]
+    ac = json.loads(Path(hf_hub_download(spec["hf"], "adapter_config.json", token=HF_TOKEN)).read_text())
+    base = str(ac.get("base_model_name_or_path") or "")
+    if not base.startswith("meta-llama/"):          # the adapter records the authors' local path (e.g. base_models/Llama-2-7b-hf)
+        base = spec["base"]
+    bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16, bnb_4bit_use_double_quant=True)
+    tok = AutoTokenizer.from_pretrained(base, token=HF_TOKEN); tok.pad_token = tok.pad_token or tok.eos_token; tok.padding_side = "right"
+    lm = AutoModelForCausalLM.from_pretrained(base, quantization_config=bnb, device_map={"": 0}, token=HF_TOKEN, torch_dtype=torch.bfloat16)
+    if trainable:
+        from peft import prepare_model_for_kbit_training
+        lm = prepare_model_for_kbit_training(lm, use_gradient_checkpointing=True)
+    lm = PeftModel.from_pretrained(lm, spec["hf"], token=HF_TOKEN, is_trainable=trainable)
+    return tok, lm, base
+
+def fingpt_inputs(tok, texts, max_len):
+    budget = max_len - 48
+    cut = [tok.decode(tok(t_[: 8 * budget], add_special_tokens=False, truncation=True, max_length=budget)["input_ids"]) for t_ in texts]
+    return [FINGPT_PROMPT.replace("{text}", c) for c in cut]
+
+@torch.no_grad()
+def fingpt_embed(tok, lm, max_len=1024, bs=4):
+    prompts = fingpt_inputs(tok, EV_TEXT, max_len)
+    ans = [tok(w, add_special_tokens=False)["input_ids"][0] for w in ("negative", "neutral", "positive")]   # first sub-word ("▁neg...")
+    E = np.zeros((N_EV, lm.config.hidden_size), np.float32); S = np.zeros((N_EV, 3), np.float32)
+    order = np.argsort([len(p_) for p_ in prompts])
+    for s in range(0, N_EV, bs):
+        ix = order[s: s + bs]
+        enc = tok([prompts[i] for i in ix], return_tensors="pt", padding=True, truncation=True, max_length=max_len).to(DEV)
+        out = lm(**enc, output_hidden_states=True)
+        h = out.hidden_states[-1].float(); m = enc["attention_mask"].unsqueeze(-1).float()
+        E[ix] = ((h * m).sum(1) / m.sum(1)).cpu().numpy()
+        last = enc["attention_mask"].sum(1) - 1
+        lg = out.logits[torch.arange(len(ix), device=DEV), last][:, ans].float()
+        S[ix] = torch.softmax(lg, -1).cpu().numpy()
+    return E, S
+
+def run_fingpt():
+    mid = "fingpt_frozen"
+    if not RUN_FINGPT:
+        not_run(mid, "RUN_FINGPT=False"); return
+    if not HAS_GPU or not HF_TOKEN:
+        not_run(mid, "needs a GPU and HF_TOKEN with the Llama-2 licence accepted"); return
+    fpath = SUB["features"] / f"textemb_fingpt_{N_EV}_{TEXT_KEY}.npz"
+    st = Stage("text_emb_fingpt", [NLPC["fingpt"], N_EV, TEXT_KEY, FINGPT_PROMPT], [fpath])
+    if not (st.done() and fpath.exists()):
+        try:
+            tok, lm, base = load_fingpt()
+        except Exception as e:
+            not_run(mid, f"could not load FinGPT/Llama-2 ({type(e).__name__}: {str(e)[:160]}). Accept the licence at "
+                         "https://huggingface.co/meta-llama/Llama-2-7b-hf with the HF_TOKEN account"); return
+        t0 = time.time(); E, S = fingpt_embed(tok, lm, NLPC["fingpt"]["max_len"])
+        np.savez_compressed(fpath, mean=E.astype(np.float16), sentiment=S)
+        st.finish(minutes=round((time.time() - t0) / 60, 2), base=base); del lm; torch.cuda.empty_cache()
+    z = np.load(fpath); TEXT_EMB["fingpt"] = z["mean"].astype(np.float32)
+    Zp, TEXT_PCAOBJ["fingpt"] = text_pca(TEXT_EMB["fingpt"], EVENT.mask["train"], CFG["probe"]["pca_text"])
+    TEXT_PCA["fingpt"] = np.hstack([Zp, z["sentiment"].astype(np.float32)])
+    finalize(EVENT, mid, fit_heads(EVENT, TEXT_PCA["fingpt"], EVENT.mask["train"], EVENT.mask["inner"], "linear"), "nlp_frozen",
+             encoder="fingpt", label=NLPC["fingpt"]["label"] + " (frozen, 4-bit)", params_m=6738)
+    FINGPT_SENT = pd.DataFrame(z["sentiment"], columns=["p_negative", "p_neutral", "p_positive"]).assign(form=EV.form.values, block=EV.block.values)
+    FINGPT_SENT.groupby(["form"])[["p_negative", "p_neutral", "p_positive"]].mean().to_csv(SUB["tables"] / "fingpt_sentiment_by_form.csv")
+try:
+    run_fingpt()
+except Exception as e:
+    failed("fingpt_frozen", e)
+gc.collect(); torch.cuda.empty_cache() if HAS_GPU else None
+
+# %%
+# ---------------------------------------------------------------- FinBERT sentence tone (for Q8): mean P(positive) - P(negative) of the first 40 sentences
+TONE_PATH = SUB["features"] / f"finbert_tone_{N_EV}_{TEXT_KEY}.npy"
+if TONE_PATH.exists():
+    TONE = np.load(TONE_PATH)
+elif HAS_GPU:
+    tk = AutoTokenizer.from_pretrained(NLPC["finbert"]["hf"])
+    clf = AutoModelForSequenceClassification.from_pretrained(NLPC["finbert"]["hf"]).to(DEV).eval()
+    lab = {v.lower(): int(k) for k, v in clf.config.id2label.items()}
+    sents, own = [], []
+    for i, tx in enumerate(EV_TEXT):
+        ss = [s_ for s_ in re.split(r"(?<=[\.\!\?])\s+", tx[:20000]) if 30 <= len(s_) <= 600][:40]
+        sents += ss; own += [i] * len(ss)
+    own = np.array(own); pr = np.zeros((len(sents), 3), np.float32)
+    with torch.no_grad():
+        for s in range(0, len(sents), 256):
+            enc = tk(sents[s: s + 256], truncation=True, max_length=96, padding=True, return_tensors="pt").to(DEV)
+            with torch.autocast("cuda", dtype=AMP_DTYPE):
+                pr[s: s + 256] = torch.softmax(clf(**enc).logits.float(), -1).cpu().numpy()
+    net_ = pr[:, lab.get("positive", 0)] - pr[:, lab.get("negative", 1)]
+    TONE = np.full(N_EV, np.nan, np.float32)
+    if len(own):
+        sums = np.bincount(own, weights=net_, minlength=N_EV); cnts = np.bincount(own, minlength=N_EV)
+        TONE = np.where(cnts > 0, sums / np.maximum(cnts, 1), np.nan).astype(np.float32)
+    np.save(TONE_PATH, TONE); del clf; torch.cuda.empty_cache()
+else:
+    TONE = np.full(N_EV, np.nan, np.float32)
+EV["finbert_tone"] = TONE
+tick("16 nlp frozen")

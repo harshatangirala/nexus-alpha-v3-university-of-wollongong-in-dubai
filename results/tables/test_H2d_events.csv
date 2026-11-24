@@ -1,0 +1,5 @@
+family,task,A,B,n,skill_A,skill_B,delta,lo,hi,p,p_holm,verdict
+H2d direction skill: best NLP vs strongest no-text baseline (events),dir_5,deberta_l_ft,company_event,2162,0.0032886046447293538,-0.004435451888759712,0.007724056533489065,-0.019874736195754136,0.032728690419282905,0.5874125874125874,1.0,no clear difference
+H2d direction skill: best NLP vs strongest no-text baseline (events),dir_10,secbert_ft,company_event,2156,0.0009369469012721621,0.009832388754509536,-0.008895441853237374,-0.05174681459307142,0.03494062428815385,0.6373626373626373,1.0,no clear difference
+H2d direction skill: best NLP vs strongest no-text baseline (events),dir_20,secbert_ft,company_event,2140,0.002819518054671899,0.0016744353506727427,0.0011450827039991562,-0.06098376711299356,0.05925627855386011,0.8991008991008991,1.0,no clear difference
+H2d direction skill: best NLP vs strongest no-text baseline (events),dir_40,fingpt_frozen,company_event,2108,0.0047384555251784866,-0.010059020588911949,0.014797476114090435,-0.009714942920149898,0.043078380362301,0.24575424575424576,0.983016983016983,no clear difference
