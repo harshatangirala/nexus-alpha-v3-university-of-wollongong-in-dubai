@@ -25,7 +25,7 @@ EXA = os.path.join(ROOT, "lite", "examples")
 OUT = os.path.join(HERE, "NEXUS_Alpha_v3_Presentation.pptx")
 
 REPO = "github.com/harshatangirala/nexus-alpha-v3-university-of-wollongong-in-dubai"
-FULL = "buffalo-deposits-graph-legends.trycloudflare.com"
+FULL = "anime-sedan-harddisk.ngrok-free.dev"
 LITE = "nexus-alpha-v3-lite.streamlit.app"
 
 # ------------------------------------------------------------------ palette (a trading terminal at night)

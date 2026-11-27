@@ -2,7 +2,7 @@
 
 Public, always-on version of the dashboard for Streamlit Community Cloud: <https://nexus-alpha-v3-lite.streamlit.app>
 
-The full dashboard (`dashboard/app_pro.py`) loads 13 neural networks (2.9 GB of weights, about 5 GB of memory). That is more than free hosting allows, so it runs on the author's machine and is online during demonstrations: <https://buffalo-deposits-graph-legends.trycloudflare.com>
+The full dashboard (`dashboard/app_pro.py`) loads 13 neural networks (2.9 GB of weights, about 5 GB of memory). That is more than free hosting allows, so it runs on the author's machine and is online during demonstrations: <https://anime-sedan-harddisk.ngrok-free.dev>
 
 ## What the lite version shows
 

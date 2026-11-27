@@ -5,7 +5,7 @@
 | | Link |
 |---|---|
 | Lite dashboard (public, always on) | <https://nexus-alpha-v3-lite.streamlit.app> |
-| Full dashboard (13 networks, runs on the author's machine during demonstrations) | <https://buffalo-deposits-graph-legends.trycloudflare.com> |
+| Full dashboard (13 networks, runs on the author's machine during demonstrations) | <https://anime-sedan-harddisk.ngrok-free.dev> |
 | CV dataset (price bars the charts are drawn from) | <https://drive.google.com/file/d/1Y7wvfpJcjnmXLP79hHTih-jj5pt-muu-/view> |
 | NLP dataset (EDGAR filing text and metadata) | <https://drive.google.com/drive/folders/1nczPvpd_wkMgF5N7uFBfAQMp-Ja96TRI> |
 | All project data | <https://drive.google.com/drive/folders/13rokT8OX1MgZQpzTRLeyvDq-FVdgraSh> |
